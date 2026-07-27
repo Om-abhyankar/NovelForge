@@ -3251,7 +3251,13 @@ class App(tk.Tk):
         from .. import storygraph
 
         graph = storygraph.cached_graph(self.project)
-        signature = (id(graph) if graph is not None else 0,
+        # Deliberately NOT keyed on the graph's identity. The graph is rebuilt
+        # whenever a scene changes, so that made every typing pause rebuild
+        # the whole lexicon from disk - seconds of frozen interface, in the
+        # middle of writing. The cast and the accepted words are what the
+        # lexicon is actually made of; new prose can wait for the next
+        # explicit rebuild.
+        signature = (str(self.project.root),
                      len(self.project.data.entities),
                      len(getattr(self.project.data, "accepted_words", [])))
         if rebuild or getattr(self, "_lex_signature", None) != signature:
@@ -3347,13 +3353,18 @@ class App(tk.Tk):
                 return "break"
             return handler
 
-        for widget in (listbox, self.editor.text):
-            widget.bind("<Return>", accept, add="+")
-            widget.bind("<Tab>", accept, add="+")
-            widget.bind("<Down>", move(1), add="+")
-            widget.bind("<Up>", move(-1), add="+")
-            widget.bind("<Escape>", lambda _e: self._close_completions(),
-                        add="+")
+        # Bindings added to the editor must be removed again when the popup
+        # closes. Adding them with add="+" and never unbinding left a handler
+        # referencing a destroyed listbox, so every later Enter, Tab or arrow
+        # key in the editor raised a TclError - the popup broke typing itself.
+        self._completion_bindings = []
+        for sequence, handler in (("<Return>", accept), ("<Tab>", accept),
+                                  ("<Down>", move(1)), ("<Up>", move(-1)),
+                                  ("<Escape>",
+                                   lambda _e: self._close_completions())):
+            listbox.bind(sequence, handler)
+            token = self.editor.text.bind(sequence, handler, add="+")
+            self._completion_bindings.append((sequence, token))
         listbox.bind("<Double-Button-1>", accept)
         # Deliberately no FocusOut handler: showing the popup takes focus
         # away from the editor, which would fire it immediately and close the
@@ -3371,6 +3382,14 @@ class App(tk.Tk):
         self._editor_dirty = True
 
     def _close_completions(self, _event=None) -> None:
+        # Unbind first: a handler left on the editor would still be holding a
+        # reference to the listbox that is about to be destroyed.
+        for sequence, token in getattr(self, "_completion_bindings", []):
+            try:
+                self.editor.text.unbind(sequence, token)
+            except tk.TclError:
+                pass
+        self._completion_bindings = []
         state = getattr(self, "_completion", None)
         if not state:
             return

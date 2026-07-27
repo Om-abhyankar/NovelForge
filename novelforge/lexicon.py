@@ -166,7 +166,7 @@ class Lexicon:
         somewhere, which is exactly what makes it safe.
         """
         words = _WORD.findall(text.lower())
-        for size in (3, 2, 1):
+        for size in (2, 1):
             if len(words) < size:
                 continue
             key = " ".join(words[-size:])
@@ -310,11 +310,20 @@ def build(project, graph=None, max_scenes: int = 0) -> Lexicon:
         words = _WORD.findall(text)
         lex.frequency.update(w.lower() for w in words)
 
+        # Only bigram context, and only after a word worth predicting from.
+        #
+        # Storing 1-, 2- and 3-word keys for every position built a table with
+        # roughly three entries per word in the book: about 190 MB and three
+        # seconds of frozen interface on a full novel, rebuilt every time the
+        # writer paused. Two-word keys alone answer the same question - "what
+        # follows this phrase" - at a fraction of the cost, and the single
+        # word fallback below covers the rest.
         lowered = [w.lower() for w in words]
-        for size in (1, 2, 3):
-            for index in range(len(lowered) - size):
-                key = " ".join(lowered[index:index + size])
-                following[key][lowered[index + size]] += 1
+        for index in range(len(lowered) - 2):
+            following[lowered[index] + " " + lowered[index + 1]][
+                lowered[index + 2]] += 1
+        for index in range(len(lowered) - 1):
+            following[lowered[index]][lowered[index + 1]] += 1
 
         for match in _PROPER.finditer(text):
             phrase = match.group(0)
@@ -331,7 +340,14 @@ def build(project, graph=None, max_scenes: int = 0) -> Lexicon:
                     continue
             proper_counts[phrase] += 1
 
-    lex.following = {k: v for k, v in following.items() if sum(v.values()) > 1}
+    # A continuation seen once is not a pattern, and dropping those removes
+    # the great majority of the table. Each surviving entry keeps only its
+    # commonest handful, because nothing past the sixth is ever offered.
+    lex.following = {
+        key: Counter(dict(counts.most_common(6)))
+        for key, counts in following.items()
+        if sum(counts.values()) > 1
+    }
 
     for phrase, count in proper_counts.items():
         key = phrase.lower()

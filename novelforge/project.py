@@ -888,10 +888,59 @@ class Project:
     # branch being left and copies the branch being entered in.
 
     def _draft_folder(self, scene: Scene) -> Path:
-        folder = (self.folder("drafts")
-                  / safe_filename(scene.title or scene.id, "Scene"))
+        """
+        Where a scene's branches live, keyed on its id and not its title.
+
+        Keying on the title was a way to lose prose. Two scenes called
+        "Scene 1" - which is what the New Scene box offers by default, counted
+        per chapter - shared one folder, so branching the second overwrote the
+        first's parked text. Renaming a scene was as bad: the folder key moved,
+        the branch files became unreachable, and switching back to Main wrote
+        an empty document over the live scene.
+
+        The id is in the folder name so it is unique; the title is in it too
+        so the folder is recognisable in Explorer.
+        """
+        folder = self.folder("drafts") / safe_filename(
+            f"{scene.title} [{scene.id}]" if scene.title else scene.id,
+            scene.id)
+        if not folder.exists():
+            self._migrate_draft_folder(scene, folder)
         folder.mkdir(parents=True, exist_ok=True)
         return folder
+
+    def _migrate_draft_folder(self, scene: Scene, target: Path) -> None:
+        """
+        Find this scene's branches under whatever name they were filed under.
+
+        Two cases. A folder from an older version, named after the title
+        alone - copied rather than moved, because two same-titled scenes may
+        be sharing it and that is the corruption being fixed. And a folder
+        from before the scene was renamed, identified by the id in brackets -
+        moved, because it belongs to exactly this scene.
+
+        Without this the id-keyed fix would itself destroy prose: the branch
+        files would look missing, and switch_draft's "the file is gone" path
+        writes an empty document over the live scene.
+        """
+        drafts = self.folder("drafts")
+        marker = f"[{scene.id}]"
+        try:
+            for candidate in drafts.iterdir():
+                if candidate.is_dir() and candidate.name.endswith(marker) \
+                        and candidate != target:
+                    shutil.move(str(candidate), str(target))
+                    return
+        except OSError:
+            return
+
+        legacy = drafts / safe_filename(scene.title or scene.id, "Scene")
+        if legacy == target or not legacy.is_dir():
+            return
+        try:
+            shutil.copytree(legacy, target)
+        except (OSError, shutil.Error):
+            return
 
     def _draft_path(self, scene: Scene, name: str) -> Path:
         return self._draft_folder(scene) / f"{safe_filename(name, 'Draft')}.docx"
@@ -947,17 +996,22 @@ class Project:
         self.mark_dirty()
         return name
 
-    def _store_draft(self, scene: Scene, name: str) -> None:
-        """Copy the live file into the named branch slot."""
+    def _store_draft(self, scene: Scene, name: str) -> bool:
+        """
+        Copy the live file into the named branch slot.
+
+        Returns whether the text is now safely parked. The caller must not
+        overwrite the live document unless this said yes - the whole point of
+        parking is that switching away cannot lose what is on screen.
+        """
         source = self.abs(scene.docx)
         if not source.exists():
-            return
+            return True         # nothing to park
         try:
             shutil.copy2(source, self._draft_path(scene, name))
+            return True
         except OSError:
-            # A failed park must not block the switch; the live file is intact
-            # and that is what matters.
-            pass
+            return False
 
     def switch_draft(self, scene_id: str, name: str) -> str:
         scene = self.data.scene(scene_id)
@@ -969,7 +1023,21 @@ class Project:
         if name not in self.list_drafts(scene_id):
             raise ProjectError(f"'{name}' is not a draft of this scene.")
 
-        self._store_draft(scene, current)
+        if not self._store_draft(scene, current):
+            raise ProjectError(
+                f"Could not park the '{current}' draft, so switching would "
+                f"lose what is on screen. The document may be open in Word - "
+                f"close it and try again."
+            )
+        # A copy of what is about to be replaced, in the ordinary version
+        # history, so File > Versions can reach it like any other document.
+        try:
+            from . import backup
+
+            backup.snapshot_document(self, self.abs(scene.docx), scene.title)
+        except Exception:
+            pass
+
         target = self._draft_path(scene, name)
         if target.exists():
             try:
