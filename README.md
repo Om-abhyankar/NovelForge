@@ -534,6 +534,26 @@ the project folder going away — which is one good way to crash a program.
 On a normal start it quietly puts you back in the scene you were writing, at
 the line you left off.
 
+## Undo covers more than typing
+
+The editor has always had its own undo. Now so does everything around it —
+renaming a chapter, moving a scene, deleting a character, changing a field in
+the inspector.
+
+| Where you are | `Ctrl+Z` does |
+|---|---|
+| In the editor | Undo typing (as before) |
+| Anywhere else | Undo the last change to the project |
+| Either | `Ctrl+Alt+Z`, or **Edit → Undo**, always undoes the project change |
+
+The Edit menu names it — *"Undo delete the chapter 'Doomed'"* — so you know what
+is about to come back before you press it.
+
+**Deleting is no longer a one-way door.** Choosing "delete the files too" now
+moves the documents to a `_Trash` folder inside the project instead of erasing
+them, and undo puts them back where they were, prose intact. Nothing in `_Trash`
+is ever removed automatically.
+
 ## Saves are verified before they land
 
 Every document is written to a temporary file first, checked that it is a valid

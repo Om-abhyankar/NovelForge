@@ -3340,7 +3340,17 @@ WRITING
   F11               Focus mode (dim other paragraphs)
   F12               Distraction free (hide side panes)
   Ctrl+=  Ctrl+-    Bigger / smaller text
-  Ctrl+Z  Ctrl+Y    Undo / redo, inside the editor
+
+UNDO
+  Ctrl+Z            In the editor: undo typing.
+                    Anywhere else: undo the last change to the project -
+                    a rename, a move, a delete, an inspector edit.
+  Ctrl+Y            Redo
+  Ctrl+Alt+Z        Undo the last project change even while typing
+  Edit menu         Shows exactly what Undo would take back
+
+  Deleted documents go to the _Trash folder inside the project, not
+  into thin air. Undo puts them back where they were.
 
 TOOLS
   Ctrl+F            Find in project
