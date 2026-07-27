@@ -621,6 +621,11 @@ class MapEditor(tk.Toplevel):
             point = self._event_point(event)
             dx = point[0] - self._drag_from[0]
             dy = point[1] - self._drag_from[1]
+            # The same 3-pixel dead-zone the freehand tool uses. Below it this
+            # is a click, not a drag, and treating it as a drag marked the map
+            # edited every time the writer selected something to look at it.
+            if math.hypot(dx, dy) * self.zoom < 3:
+                return
             self._move_selection(dx, dy)
             self._drag_from = point
             self.redraw()
@@ -868,6 +873,12 @@ class MapEditor(tk.Toplevel):
 
     def _move_selection(self, dx: float, dy: float) -> None:
         if not (self.gm and self.selected_id):
+            return
+        # A click is never perfectly still. Without this, the hand-tremor of
+        # an ordinary click on a pin counted as an edit, and since unsaved
+        # work is now saved rather than queried, merely looking at a map
+        # would write it back to disk.
+        if dx == 0 and dy == 0:
             return
         if self.selected_kind == "shape":
             shape = self.gm.shape(self.selected_id)
@@ -1486,17 +1497,21 @@ A NOTE ON SCALE
                 self.cmd_save()
             return True
 
-        self.cmd_save()
-        if self.dirty:
-            # cmd_save has already explained why it could not write. Now the
-            # question is worth asking, because the alternative is losing it.
-            return messagebox.askretrycancel(
+        # cmd_save has already explained any failure. Keep offering to retry
+        # until it works or the writer chooses to stay - never close on a
+        # failed save, because closing is what loses the map.
+        while True:
+            self.cmd_save()
+            if not self.dirty:
+                return True
+            if not messagebox.askretrycancel(
                 "Could not save the map",
                 f"'{self.gm.name}' could not be written to disk.\n\n"
-                f"Retry - try again\nCancel - stay here and keep the map open",
+                f"Retry - try saving again\n"
+                f"Cancel - stay here, with the map still open",
                 parent=self,
-            ) is False
-        return True
+            ):
+                return False
 
     def _close(self) -> None:
         if not self._confirm_discard():
