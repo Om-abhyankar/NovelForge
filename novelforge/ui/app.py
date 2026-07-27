@@ -34,6 +34,7 @@ from .. import (
 )
 from ..atomic import FileBusyError
 from ..config import (
+    THEMES,
     app_root,
     open_in_default_app,
     projects_root,
@@ -99,6 +100,9 @@ class App(tk.Tk):
         self._suppress_modified = False
         self._autosave_job: Optional[str] = None
         self._journal_job: Optional[str] = None
+        self._check_job: Optional[str] = None
+        self._writing_hits: List[Any] = []
+        self.live_check_var = tk.BooleanVar(value=settings["live_writing_check"])
         self._count_job: Optional[str] = None
         self._focus_job: Optional[str] = None
         self._form: Optional[Form] = None
@@ -351,6 +355,12 @@ class App(tk.Tk):
         tools_menu.add_command(label="Writer's Block Diagnostic",
                                command=self.cmd_block_diagnostic)
         tools_menu.add_separator()
+        tools_menu.add_command(label="Spelling and Grammar",
+                               accelerator="Shift+F7",
+                               command=self.cmd_writing_check)
+        tools_menu.add_checkbutton(
+            label="Underline mistakes as I type",
+            variable=self.live_check_var, command=self.cmd_toggle_live_check)
         tools_menu.add_command(label="Check Names in This Scene",
                                command=self.cmd_check_names)
         tools_menu.add_command(label="What the Editor Knows...",
@@ -568,6 +578,7 @@ class App(tk.Tk):
         self.editor.text.bind("<Button-3>", self.on_editor_right_click)
         self.editor.text.bind("<Control-space>", self.cmd_complete)
         self._completion = None
+        self._style_writing_tags()
         self._style_editor()
         self.editor.text.bind("<<Modified>>", self.on_editor_modified)
         self.editor.text.bind("<KeyRelease>", self.on_editor_key)
@@ -618,6 +629,7 @@ class App(tk.Tk):
             "<Control-g>": lambda _e: self.cmd_story_graph(),
             "<Control-i>": lambda _e: self.cmd_idea_inbox(),
             "<F4>": lambda _e: self.cmd_verify_project(),
+            "<Shift-F7>": lambda _e: self.cmd_writing_check(),
             "<F10>": lambda _e: self.cmd_continuity(),
             "<F5>": lambda _e: self.cmd_compile(),
             "<Shift-F5>": lambda _e: self.cmd_compile(quick=True),
@@ -1499,6 +1511,7 @@ class App(tk.Tk):
         self._schedule_autosave()
         self._schedule_journal()
         self._schedule_count()
+        self._schedule_writing_check()
 
     def on_editor_key(self, event=None) -> None:
         if self.typewriter_var.get():
@@ -3350,6 +3363,161 @@ class App(tk.Tk):
             pass
         self._completion = None
 
+    # ------------------------------------------------------------------
+    # Live spelling, usage and grammar
+    # ------------------------------------------------------------------
+
+    def _schedule_writing_check(self) -> None:
+        """Re-check the scene shortly after typing stops."""
+        if not settings["live_writing_check"]:
+            return
+        if self._check_job:
+            try:
+                self.after_cancel(self._check_job)
+            except (ValueError, tk.TclError):
+                pass
+        self._check_job = self.after(900, self._run_writing_check)
+
+    def _run_writing_check(self) -> None:
+        """
+        Underline what is worth looking at, without interrupting anything.
+
+        Runs on the whole scene rather than the visible window: a scene is a
+        couple of thousand words, the rules are regular expressions, and the
+        cost is a few milliseconds. Doing it per-visible-line would mean
+        re-checking on every scroll for no benefit.
+        """
+        self._check_job = None
+        if not (self.project and self.current_scene_id):
+            return
+        if not settings["live_writing_check"]:
+            return
+        from .. import grammar
+
+        text = self.editor.get_value()
+        try:
+            hits = grammar.check(text, self.lexicon(), limit=200)
+        except Exception:
+            return
+        self._writing_hits = hits
+
+        widget = self.editor.text
+        for tag in ("nf_hard", "nf_soft"):
+            widget.tag_remove(tag, "1.0", "end")
+        for hit in hits:
+            start = f"1.0 + {hit.start}c"
+            end = f"1.0 + {hit.end}c"
+            try:
+                widget.tag_add(
+                    "nf_hard" if hit.severity == "hard" else "nf_soft",
+                    start, end)
+            except tk.TclError:
+                continue
+        counts = grammar.summarise(hits)
+        if counts:
+            self.status.say(
+                "  ".join(f"{kind}: {n}" for kind, n in sorted(counts.items()))
+                + "    (right-click a mark to fix it)", 0)
+        else:
+            self.status.say("")
+
+    def _style_writing_tags(self) -> None:
+        """
+        Colours for the two kinds of mark, matched to the theme.
+
+        Underline rather than a coloured background: prose is the thing being
+        read, and a highlighter over every third word makes it unreadable. Tk
+        has no squiggly underline, so a plain one it is.
+        """
+        colours = THEMES.get(settings["theme"], THEMES["warm"])
+        widget = self.editor.text
+        try:
+            widget.tag_configure("nf_hard", underline=True,
+                                 foreground="#a4433a")
+            widget.tag_configure("nf_soft", underline=True,
+                                 foreground=colours.get("text_faint", "#8a8175"))
+            widget.tag_raise("sel")
+        except tk.TclError:
+            pass
+
+    def _hit_at(self, index: str):
+        """The finding under a text index, if any."""
+        try:
+            offset = len(self.editor.text.get("1.0", index))
+        except tk.TclError:
+            return None
+        for hit in getattr(self, "_writing_hits", []):
+            if hit.start <= offset < hit.end:
+                return hit
+        return None
+
+    def _apply_fix(self, hit) -> None:
+        widget = self.editor.text
+        widget.edit_separator()
+        widget.delete(f"1.0 + {hit.start}c", f"1.0 + {hit.end}c")
+        widget.insert(f"1.0 + {hit.start}c", hit.suggestion)
+        widget.edit_separator()
+        self._editor_dirty = True
+        self._schedule_writing_check()
+
+    def cmd_writing_check(self) -> None:
+        """The full list for this scene, in one window."""
+        if not self.require_project() or not self.current_scene_id:
+            messagebox.showinfo("Open a scene",
+                                "Select a scene to check.", parent=self)
+            return
+        from .. import grammar
+
+        text = self.editor.get_value()
+        hits = grammar.check(text, self.lexicon(), limit=300)
+        scene = self.project.data.scene(self.current_scene_id)
+        body = grammar.report(hits, text,
+                              f"WRITING CHECK - {scene.title if scene else ''}")
+        window = dialogs.ReportWindow(self, "Writing check", body,
+                                      width=760, height=640)
+        if hits:
+            window.add_action("Fix everything obvious",
+                              lambda: self._fix_all_obvious(hits, window))
+
+    def _fix_all_obvious(self, hits, window) -> None:
+        """
+        Apply only the corrections that are not judgement calls.
+
+        Spelling and missing apostrophes have exactly one right answer.
+        Agreement and usage often do not - "he were" may be deliberate - so
+        those are left for the writer.
+        """
+        safe = [h for h in hits
+                if h.suggestion and h.kind in ("spelling", "typing")]
+        if not safe:
+            messagebox.showinfo(
+                "Nothing automatic",
+                "The remaining findings need a decision only you can make.",
+                parent=window)
+            return
+        widget = self.editor.text
+        widget.edit_separator()
+        for hit in sorted(safe, key=lambda h: -h.start):
+            widget.delete(f"1.0 + {hit.start}c", f"1.0 + {hit.end}c")
+            widget.insert(f"1.0 + {hit.start}c", hit.suggestion)
+        widget.edit_separator()
+        self._editor_dirty = True
+        self.save_editor(snapshot=False)
+        self._schedule_writing_check()
+        window.destroy()
+        self.status.say(f"Fixed {len(safe)} spellings. Ctrl+Z undoes it.", 8)
+
+    def cmd_toggle_live_check(self) -> None:
+        settings["live_writing_check"] = not settings["live_writing_check"]
+        if settings["live_writing_check"]:
+            self._run_writing_check()
+            self.status.say("Live checking on.", 4)
+        else:
+            for tag in ("nf_hard", "nf_soft"):
+                self.editor.text.tag_remove(tag, "1.0", "end")
+            self._writing_hits = []
+            self.status.say("Live checking off.", 4)
+
     def cmd_lexicon_report(self) -> None:
         if not self.require_project():
             return
@@ -3390,6 +3558,22 @@ class App(tk.Tk):
             return
         word = text.get("insert wordstart", "insert wordend").strip()
         menu = tk.Menu(self, tearoff=0)
+
+        # A finding under the caret comes first: that is what the writer
+        # right-clicked the underline for.
+        hit = self._hit_at("insert")
+        if hit is not None:
+            menu.add_command(label=hit.message, state="disabled")
+            if hit.suggestion:
+                menu.add_command(
+                    label=f"Change to  '{' '.join(hit.suggestion.split())}'",
+                    command=lambda h=hit: self._apply_fix(h))
+            if hit.kind in ("spelling", "name"):
+                menu.add_command(
+                    label=f"Keep '{hit.text}' - add to the dictionary",
+                    command=lambda w=hit.text: self.cmd_accept_word(w))
+            menu.add_separator()
+
         menu.add_command(label="Cut",
                          command=lambda: text.event_generate("<<Cut>>"))
         menu.add_command(label="Copy",

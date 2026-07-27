@@ -114,6 +114,11 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "backup_retention": 25,
     "snapshot_on_save": True,
     "snapshot_retention_per_doc": 40,
+    # Off by default: the Map Maker keeps unsaved work by saving it, rather
+    # than by asking. Turn this on to be asked instead.
+    "map_prompt_on_close": False,
+    # -- writing check ----------------------------------------------------
+    "live_writing_check": True,
     # -- session ---------------------------------------------------------
     "last_project": "",
     "window_geometry": "1400x880",

@@ -266,7 +266,11 @@ class MapEditor(tk.Toplevel):
         else:
             self.gm = mm.starter_map("The Known World", "world", "parchment")
             self.map_file = None
-            self.dirty = True
+            # Not dirty: this is a default the tool made up, not something the
+            # writer drew. Marking it unsaved meant that merely opening the
+            # Map Maker and closing it again asked whether to save - which is
+            # the single most irritating thing a window can do.
+            self.dirty = False
             self._after_load()
             self._say("New map created with a starter coastline. "
                       "Press Save to keep it, or draw your own.")
@@ -1450,18 +1454,48 @@ A NOTE ON SCALE
         self.title(f"Map Maker - {self.gm.name}{marker}")
 
     def _confirm_discard(self) -> bool:
+        """
+        Make sure nothing is lost, without asking permission to do it.
+
+        The old behaviour was a Yes/No/Cancel box every single time the window
+        closed or the map changed. A writer who has drawn something wants to
+        keep it; a writer who has not drawn anything is being interrupted for
+        no reason. Neither of them wants to answer a question.
+
+        So: unsaved work is simply saved. A map that already has a file goes
+        back to that file; one that has never been saved gets a file named
+        after itself. Only a save that actually *fails* is worth an interruption,
+        because then there is a real decision to make.
+
+        Set "map_prompt_on_close" if you would rather be asked.
+        """
         if not (self.gm and self.dirty):
             return True
-        answer = messagebox.askyesnocancel(
-            "Unsaved map",
-            f"'{self.gm.name}' has unsaved changes.\n\n"
-            f"Yes - save it first\nNo - discard the changes\nCancel - go back",
-            parent=self,
-        )
-        if answer is None:
-            return False
-        if answer:
-            self.cmd_save()
+
+        if settings["map_prompt_on_close"]:
+            answer = messagebox.askyesnocancel(
+                "Unsaved map",
+                f"'{self.gm.name}' has unsaved changes.\n\n"
+                f"Yes - save it first\nNo - discard the changes\n"
+                f"Cancel - go back",
+                parent=self,
+            )
+            if answer is None:
+                return False
+            if answer:
+                self.cmd_save()
+            return True
+
+        self.cmd_save()
+        if self.dirty:
+            # cmd_save has already explained why it could not write. Now the
+            # question is worth asking, because the alternative is losing it.
+            return messagebox.askretrycancel(
+                "Could not save the map",
+                f"'{self.gm.name}' could not be written to disk.\n\n"
+                f"Retry - try again\nCancel - stay here and keep the map open",
+                parent=self,
+            ) is False
         return True
 
     def _close(self) -> None:
