@@ -90,6 +90,207 @@ def build_graph_with_progress(parent, project):
         parent.update_idletasks()
 
 
+class ReplaceWindow(tk.Toplevel):
+    """
+    Find and replace across the whole project.
+
+    Renaming a character is the reason this exists. On a 300,000 word
+    manuscript it is the difference between ten seconds and an afternoon, and
+    doing it by hand in Word means missing the scene cards, the character
+    sheets and the aliases.
+
+    Nothing is written until Replace All is pressed, and Preview is the
+    default action so the writer always sees the damage first.
+    """
+
+    def __init__(self, parent, project, on_change: Callable[[], None]) -> None:
+        super().__init__(parent)
+        self.project = project
+        self.on_change = on_change
+        self.title(f"Find and Replace - {project.data.title}")
+        self._previewed = ""
+
+        frame = ttk.Frame(self, padding=12)
+        frame.grid(row=0, column=0, sticky="nsew")
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+        frame.columnconfigure(1, weight=1)
+        frame.rowconfigure(5, weight=1)
+
+        ttk.Label(frame, text="Find").grid(row=0, column=0, sticky="w",
+                                           padx=(0, 8), pady=2)
+        self.find_entry = ttk.Entry(frame)
+        self.find_entry.grid(row=0, column=1, sticky="ew", pady=2)
+        self.find_entry.bind("<Return>", lambda _e: self.cmd_preview())
+
+        ttk.Label(frame, text="Replace with").grid(row=1, column=0, sticky="w",
+                                                   padx=(0, 8), pady=2)
+        self.replace_entry = ttk.Entry(frame)
+        self.replace_entry.grid(row=1, column=1, sticky="ew", pady=2)
+        self.replace_entry.bind("<Return>", lambda _e: self.cmd_preview())
+
+        options = ttk.Frame(frame)
+        options.grid(row=2, column=1, sticky="w", pady=(6, 0))
+        self.whole_word = tk.BooleanVar(value=True)
+        self.match_case = tk.BooleanVar(value=False)
+        ttk.Checkbutton(options, text="Whole words only",
+                        variable=self.whole_word).grid(row=0, column=0,
+                                                       padx=(0, 12))
+        ttk.Checkbutton(options, text="Match case",
+                        variable=self.match_case).grid(row=0, column=1)
+
+        ttk.Label(frame, text="Look in").grid(row=3, column=0, sticky="nw",
+                                              padx=(0, 8), pady=(8, 0))
+        where = ttk.Frame(frame)
+        where.grid(row=3, column=1, sticky="w", pady=(8, 0))
+        self.scopes = {
+            "manuscript": tk.BooleanVar(value=True),
+            "cards": tk.BooleanVar(value=True),
+            "sheets": tk.BooleanVar(value=True),
+            "notes": tk.BooleanVar(value=True),
+            "names": tk.BooleanVar(value=False),
+        }
+        for index, (key, label) in enumerate([
+            ("manuscript", "The manuscript"),
+            ("cards", "Scene and chapter cards"),
+            ("sheets", "Character and place sheets"),
+            ("notes", "Notes and research"),
+            ("names", "Names and aliases themselves"),
+        ]):
+            ttk.Checkbutton(where, text=label,
+                            variable=self.scopes[key]).grid(
+                row=index // 2, column=index % 2, sticky="w", padx=(0, 16))
+
+        ttk.Label(
+            frame,
+            text="Nothing is changed until you press Replace All. Every "
+                 "document is copied to its version history first, so any "
+                 "single file can be put back from File > Versions.",
+            wraplength=620, justify="left", style="Hint.TLabel",
+        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 6))
+
+        self.results = ScrolledText(frame, height=16, wrap="none",
+                                    font=("Consolas", 9))
+        self.results.grid(row=5, column=0, columnspan=2, sticky="nsew")
+        _monospace(self.results)
+        self.results.set_readonly(True)
+
+        bar = ttk.Frame(frame)
+        bar.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        ttk.Button(bar, text="Preview", command=self.cmd_preview).grid(
+            row=0, column=0, padx=(0, 6))
+        self.replace_button = ttk.Button(bar, text="Replace All",
+                                         command=self.cmd_replace,
+                                         state="disabled")
+        self.replace_button.grid(row=0, column=1, padx=(0, 6))
+        bar.columnconfigure(2, weight=1)
+        ttk.Button(bar, text="Close", command=self.destroy).grid(
+            row=0, column=3, sticky="e")
+
+        center_window(self, 760, 620, min_width=560, min_height=420)
+        self.find_entry.focus_set()
+        self.bind("<Escape>", lambda _e: self.destroy())
+
+    def _chosen(self) -> List[str]:
+        return [key for key, var in self.scopes.items() if var.get()]
+
+    def _show(self, text: str) -> None:
+        self.results.set_readonly(False)
+        self.results.set_value(text)
+        self.results.set_readonly(True)
+
+    def cmd_preview(self) -> None:
+        needle = self.find_entry.get()
+        if not needle.strip():
+            self._show("Type something to find.")
+            return
+        scopes = self._chosen()
+        if not scopes:
+            self._show("Choose at least one place to look in.")
+            return
+        rows = self.project.preview_replace(
+            needle, self.replace_entry.get(), scopes=scopes,
+            match_case=self.match_case.get(),
+            whole_word=self.whole_word.get())
+        if not rows:
+            self._show(f"'{needle}' does not appear anywhere you have chosen.")
+            self.replace_button.configure(state="disabled")
+            self._previewed = ""
+            return
+
+        total = sum(row[2] for row in rows)
+        lines = [
+            f"{total} occurrence{'' if total == 1 else 's'} of '{needle}' "
+            f"in {len(rows)} place{'' if len(rows) == 1 else 's'}",
+            "=" * 74, "",
+        ]
+        for kind, label, count, snippet in rows:
+            lines.append(f"  {count:>4}  [{kind}] {label}")
+            if snippet:
+                lines.append(f"        {snippet}")
+            lines.append("")
+        self._show("\n".join(lines))
+        self.replace_button.configure(state="normal")
+        self._previewed = needle
+
+    def cmd_replace(self) -> None:
+        needle = self.find_entry.get()
+        replacement = self.replace_entry.get()
+        if not needle.strip():
+            return
+        if needle != self._previewed:
+            self._show("The search changed. Preview it again first.")
+            self.replace_button.configure(state="disabled")
+            return
+        rows = self.project.preview_replace(
+            needle, replacement, scopes=self._chosen(),
+            match_case=self.match_case.get(),
+            whole_word=self.whole_word.get())
+        total = sum(row[2] for row in rows)
+        if not messagebox.askyesno(
+            "Replace everywhere",
+            f"Replace {total} occurrence"
+            f"{'' if total == 1 else 's'} of '{needle}' with "
+            f"'{replacement}'?\n\n"
+            f"Across {len(rows)} place{'' if len(rows) == 1 else 's'}.\n\n"
+            f"Every document is copied to its version history first.",
+            parent=self,
+        ):
+            return
+
+        with self.project.action(f"replace '{needle}' with '{replacement}'"):
+            replaced, documents, problems = self.project.replace_everywhere(
+                needle, replacement, scopes=self._chosen(),
+                match_case=self.match_case.get(),
+                whole_word=self.whole_word.get())
+        self.project.save()
+
+        from .. import storygraph
+
+        storygraph.invalidate(self.project)
+        self.on_change()
+
+        lines = [
+            "DONE",
+            "=" * 74, "",
+            f"  {replaced} replacement{'' if replaced == 1 else 's'}",
+            f"  {documents} document{'' if documents == 1 else 's'} changed",
+            "",
+        ]
+        if problems:
+            lines += ["  These could not be changed:", ""]
+            for label, reason in problems:
+                lines.append(f"    {label}")
+                lines.append(f"        {reason[:120]}")
+            lines += ["", "  Close them in Word and run it again."]
+        else:
+            lines.append("  Ctrl+Z undoes the card and name changes. Prose is "
+                         "in each document's version history.")
+        self._show("\n".join(lines))
+        self.replace_button.configure(state="disabled")
+        self._previewed = ""
+
+
 class ChapterMapWindow(tk.Toplevel):
     """
     The map as it stands at any chapter.

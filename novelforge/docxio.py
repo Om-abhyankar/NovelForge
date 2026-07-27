@@ -672,6 +672,68 @@ def split_paragraphs(text: str) -> List[str]:
     return [line.strip() for line in normalised.split("\n") if line.strip()]
 
 
+def count_in_document(path: Path | str, pattern) -> int:
+    """How many times a pattern occurs in a document, body and tables."""
+    try:
+        doc = Document(str(path))
+    except Exception:
+        return 0
+    total = 0
+    for paragraph in _all_paragraphs(doc):
+        for run in paragraph.runs:
+            total += len(pattern.findall(run.text))
+    return total
+
+
+def _all_paragraphs(doc: Document):
+    """Every paragraph in the body and inside every table cell."""
+    for paragraph in doc.paragraphs:
+        yield paragraph
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    yield paragraph
+
+
+def replace_in_document(path: Path | str, pattern, replacement: str) -> int:
+    """
+    Replace inside a Word document without flattening it.
+
+    Done run by run rather than by rewriting the file from plain text, so
+    italics, bold and any styling the writer applied in Word survive. Field
+    sheets are covered too, because their content lives in table cells.
+
+    The one thing this cannot see is a match split across two runs - Word
+    splits runs at every formatting change and sometimes at a spell-check
+    boundary, so "Ada" could in principle be stored as "A" + "da". That is
+    rare in practice and the alternative, rebuilding every paragraph, would
+    lose the formatting this exists to protect.
+
+    Returns how many replacements were made; 0 leaves the file untouched.
+    """
+    from .atomic import save_via_atomic
+
+    path = Path(path)
+    try:
+        doc = Document(str(path))
+    except Exception as exc:
+        raise OSError(f"{path.name} could not be opened: {exc}") from exc
+
+    total = 0
+    for paragraph in _all_paragraphs(doc):
+        for run in paragraph.runs:
+            if not run.text:
+                continue
+            new_text, count = pattern.subn(replacement, run.text)
+            if count:
+                run.text = new_text
+                total += count
+    if total:
+        save_via_atomic(path, doc.save)
+    return total
+
+
 def word_count(text: str) -> int:
     """
     Count words the way writers and publishers do: whitespace-delimited tokens.

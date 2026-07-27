@@ -53,6 +53,7 @@ from ..project import Project, ProjectError, list_projects
 from . import dialogs
 from .widgets import (
     Form,
+    add_editing_keys,
     ScrollFrame,
     ScrolledText,
     StatusBar,
@@ -327,6 +328,8 @@ class App(tk.Tk):
         tools_menu = tk.Menu(menubar, tearoff=0)
         tools_menu.add_command(label="Find in Project...", accelerator="Ctrl+F",
                                command=self.cmd_search)
+        tools_menu.add_command(label="Find and Replace...", accelerator="Ctrl+H",
+                               command=self.cmd_replace)
         tools_menu.add_separator()
         tools_menu.add_command(label="Diagnose This Scene", accelerator="F7",
                                command=lambda: self.cmd_diagnostics("scene"))
@@ -555,6 +558,7 @@ class App(tk.Tk):
         self.detail_text.set_readonly(True)
 
         self.editor.grid(row=1, column=0, sticky="nsew")
+        add_editing_keys(self.editor.text)
         self._style_editor()
         self.editor.text.bind("<<Modified>>", self.on_editor_modified)
         self.editor.text.bind("<KeyRelease>", self.on_editor_key)
@@ -587,6 +591,7 @@ class App(tk.Tk):
             "<Control-Shift-C>": lambda _e: self.cmd_add_chapter(),
             "<Control-o>": lambda _e: self.cmd_open_project(),
             "<Control-f>": lambda _e: self.cmd_search(),
+            "<Control-h>": lambda _e: self.cmd_replace(),
             "<F2>": lambda _e: self.cmd_sync_from_disk(),
             "<Control-b>": lambda _e: self.cmd_backup(),
             "<Control-l>": lambda _e: self.cmd_outline_window(),
@@ -3191,6 +3196,24 @@ class App(tk.Tk):
         editor = MapEditor(self, self.project, on_change)
         if map_path is not None and Path(map_path).exists():
             editor._open_map(Path(map_path))
+
+    def cmd_replace(self) -> None:
+        """Find and replace across every document in the project."""
+        if not self.require_project():
+            return
+        # The editor holds unsaved text that the sweep would not see, and
+        # would then overwrite when the scene is next saved.
+        self.commit_all()
+        self.save_editor(snapshot=False)
+        from .storyviews import ReplaceWindow
+
+        def after() -> None:
+            self.refresh_tree()
+            self.render_selection()
+            self.refresh_counters()
+            self._sync_history_menu()
+
+        ReplaceWindow(self, self.project, after)
 
     def cmd_chapter_map(self) -> None:
         """The map as it stands at any chapter of the book."""

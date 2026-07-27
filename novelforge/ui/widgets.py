@@ -568,6 +568,156 @@ def clamp_to_screen(window: tk.Misc, geometry: str) -> str:
     return f"{width}x{height}+{x}+{y}"
 
 
+def add_editing_keys(text: tk.Text) -> None:
+    """
+    The editing shortcuts every other text editor has and Tk does not.
+
+    Tk already provides word navigation with Ctrl+Left/Right, Home and End,
+    Ctrl+Home/End, every Shift selection, double-click for a word and
+    Ctrl+Z/Y. What it has never had is word deletion, line operations and
+    case changes - the things a writer reaches for without thinking, and
+    notices immediately when they do nothing.
+
+    Every one of these is wrapped in an undo separator so a single Ctrl+Z
+    takes back the whole operation rather than a character at a time.
+    """
+
+    def edit(fn):
+        """Run an operation as one undoable step."""
+        def wrapped(event=None):
+            text.edit_separator()
+            try:
+                fn()
+            except tk.TclError:
+                pass
+            text.edit_separator()
+            return "break"
+        return wrapped
+
+    # -- word deletion ---------------------------------------------------
+    def delete_word_left() -> None:
+        if text.tag_ranges("sel"):
+            text.delete("sel.first", "sel.last")
+            return
+        start = text.index("insert -1c wordstart")
+        # Sitting just after a space, wordstart lands on the space itself;
+        # step back again so the word actually goes.
+        if text.get(start, "insert").strip() == "":
+            start = text.index(f"{start} -1c wordstart")
+        text.delete(start, "insert")
+
+    def delete_word_right() -> None:
+        if text.tag_ranges("sel"):
+            text.delete("sel.first", "sel.last")
+            return
+        end = text.index("insert wordend")
+        if text.get("insert", end).strip() == "":
+            end = text.index(f"{end} +1c wordend")
+        text.delete("insert", end)
+
+    # -- line operations -------------------------------------------------
+    def line_bounds() -> Tuple[str, str]:
+        return text.index("insert linestart"), text.index("insert lineend")
+
+    def duplicate_line() -> None:
+        start, end = line_bounds()
+        body = text.get(start, end)
+        text.insert(end, "\n" + body)
+        text.mark_set("insert", f"{end} +1c lineend")
+
+    def delete_line() -> None:
+        start = text.index("insert linestart")
+        end = text.index("insert lineend +1c")
+        text.delete(start, end)
+
+    def move_line(delta: int) -> None:
+        line = int(text.index("insert").split(".")[0])
+        column = text.index("insert").split(".")[1]
+        target = line + delta
+        last = int(text.index("end-1c").split(".")[0])
+        if target < 1 or target > last:
+            return
+        body = text.get(f"{line}.0", f"{line}.end")
+        other = text.get(f"{target}.0", f"{target}.end")
+        text.delete(f"{line}.0", f"{line}.end")
+        text.insert(f"{line}.0", other)
+        text.delete(f"{target}.0", f"{target}.end")
+        text.insert(f"{target}.0", body)
+        text.mark_set("insert", f"{target}.{column}")
+        text.see("insert")
+
+    def join_lines() -> None:
+        end = text.index("insert lineend")
+        if text.compare(end, ">=", "end-1c"):
+            return
+        text.delete(end, f"{end} +1c")
+        # Leave exactly one space where the break was, unless there already
+        # is one - joining should not produce "word  word".
+        if text.get(f"{end} -1c", end) not in (" ", "") and \
+                text.get(end, f"{end} +1c") != " ":
+            text.insert(end, " ")
+
+    # -- selection -------------------------------------------------------
+    def select_paragraph(event=None):
+        start = text.search(r"^\s*$", "insert", backwards=True,
+                            regexp=True) or "1.0"
+        if start != "1.0":
+            start = text.index(f"{start} +1l linestart")
+        end = text.search(r"^\s*$", "insert", regexp=True) or "end-1c"
+        text.tag_remove("sel", "1.0", "end")
+        text.tag_add("sel", start, end)
+        text.mark_set("insert", end)
+        return "break"
+
+    def select_line(event=None):
+        text.tag_remove("sel", "1.0", "end")
+        text.tag_add("sel", "insert linestart", "insert lineend")
+        return "break"
+
+    # -- case ------------------------------------------------------------
+    def recase(fn) -> None:
+        if not text.tag_ranges("sel"):
+            text.tag_add("sel", "insert wordstart", "insert wordend")
+        if not text.tag_ranges("sel"):
+            return
+        start, end = text.index("sel.first"), text.index("sel.last")
+        body = text.get(start, end)
+        text.delete(start, end)
+        text.insert(start, fn(body))
+        text.tag_add("sel", start, f"{start} +{len(body)}c")
+
+    def sentence_case(body: str) -> str:
+        import re as _re
+
+        lowered = body.lower()
+        # Capitalise the first letter, and the first after . ! ? and a break.
+        return _re.sub(r"(^|[.!?]\s+|\n\s*)([a-z])",
+                       lambda m: m.group(1) + m.group(2).upper(), lowered)
+
+    bindings = {
+        "<Control-BackSpace>": edit(delete_word_left),
+        "<Control-Delete>": edit(delete_word_right),
+        "<Control-d>": edit(duplicate_line),
+        "<Control-Shift-K>": edit(delete_line),
+        "<Alt-Up>": edit(lambda: move_line(-1)),
+        "<Alt-Down>": edit(lambda: move_line(1)),
+        "<Control-j>": edit(join_lines),
+        "<Control-Shift-U>": edit(lambda: recase(str.upper)),
+        "<Control-Shift-L>": edit(lambda: recase(str.lower)),
+        "<Control-Shift-T>": edit(lambda: recase(str.title)),
+        "<Control-Shift-S>": edit(lambda: recase(sentence_case)),
+        "<Control-l>": select_line,
+        "<Control-Shift-P>": select_paragraph,
+    }
+    for sequence, handler in bindings.items():
+        text.bind(sequence, handler)
+
+    # Triple click selects the paragraph, not just the visual line, because a
+    # paragraph is the unit a novelist actually works in.
+    text.bind("<Triple-Button-1>", lambda e: (text.after_idle(select_paragraph),
+                                              None)[1])
+
+
 def bind_tree_shortcuts(tree: ttk.Treeview) -> None:
     """Type-to-find inside a Treeview, which Tk does not give you."""
     state = {"buffer": "", "when": 0.0}

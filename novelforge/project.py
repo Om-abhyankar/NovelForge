@@ -1200,6 +1200,207 @@ class Project:
                 hits.append((scene.title, count))
         return hits
 
+    # ------------------------------------------------------------------
+    # Find and replace across the whole project
+    # ------------------------------------------------------------------
+
+    #: What replace is allowed to touch. Kept separate so renaming a character
+    #: in the prose does not silently rewrite unrelated research notes.
+    REPLACE_SCOPES = ("manuscript", "notes", "sheets", "cards", "names")
+
+    @staticmethod
+    def build_pattern(needle: str, match_case: bool = False,
+                      whole_word: bool = True,
+                      regex: bool = False) -> "re.Pattern":
+        """
+        The one place a search pattern is built, so find and replace agree.
+
+        Whole word is on by default: replacing "Ada" without it turns
+        "Adamant" into "<new>mant", and on a 300,000 word manuscript nobody
+        finds that until the proof copy arrives.
+        """
+        body = needle if regex else re.escape(needle)
+        if whole_word and not regex:
+            body = r"\b" + body + r"\b"
+        return re.compile(body, 0 if match_case else re.IGNORECASE)
+
+    def preview_replace(self, needle: str, replacement: str, *,
+                        scopes: Sequence[str] = REPLACE_SCOPES,
+                        match_case: bool = False, whole_word: bool = True,
+                        regex: bool = False, limit: int = 400
+                        ) -> List[Tuple[str, str, int, str]]:
+        """
+        What a replace would do, without doing any of it.
+
+        Returns (kind, label, count, sample) rows. Nothing is written and no
+        document is opened for writing, so this is safe to run while the
+        writer is still deciding.
+        """
+        pattern = self.build_pattern(needle, match_case, whole_word, regex)
+        rows: List[Tuple[str, str, int, str]] = []
+
+        def sample(text: str) -> str:
+            match = pattern.search(text)
+            if not match:
+                return ""
+            start = max(0, match.start() - 40)
+            end = min(len(text), match.end() + 40)
+            snippet = text[start:end].replace("\n", " ")
+            return ("..." if start else "") + snippet + \
+                   ("..." if end < len(text) else "")
+
+        if "manuscript" in scopes:
+            for scene in self.data.ordered_scenes():
+                if not scene.docx:
+                    continue
+                path = self.abs(scene.docx)
+                if not path.exists():
+                    continue
+                count = docxio.count_in_document(path, pattern)
+                if count:
+                    rows.append(("Scene", scene.display, count,
+                                 sample(docxio.read_prose(path))))
+        if "notes" in scopes:
+            for note in self.data.notes:
+                if not note.docx:
+                    continue
+                path = self.abs(note.docx)
+                if not path.exists():
+                    continue
+                count = docxio.count_in_document(path, pattern)
+                if count:
+                    rows.append(("Note", note.title, count,
+                                 sample(docxio.read_prose(path))))
+        if "sheets" in scopes:
+            for entity in self.data.entities:
+                if not entity.docx:
+                    continue
+                path = self.abs(entity.docx)
+                if not path.exists():
+                    continue
+                count = docxio.count_in_document(path, pattern)
+                if count:
+                    rows.append((ENTITY_LABELS.get(entity.type, "Sheet"),
+                                 entity.name, count,
+                                 sample(" ".join(entity.cache.values()))))
+        if "cards" in scopes:
+            for scene in self.data.ordered_scenes():
+                blob = " ".join([scene.synopsis, scene.notes, scene.goal,
+                                 scene.conflict, scene.disaster,
+                                 scene.reaction, scene.dilemma,
+                                 scene.decision, scene.value_start,
+                                 scene.value_end])
+                count = len(pattern.findall(blob))
+                if count:
+                    rows.append(("Scene card", scene.display, count,
+                                 sample(blob)))
+            for chapter in self.data.ordered_chapters():
+                blob = f"{chapter.synopsis} {chapter.notes}"
+                count = len(pattern.findall(blob))
+                if count:
+                    rows.append(("Chapter card", chapter.display, count,
+                                 sample(blob)))
+        if "names" in scopes:
+            for entity in self.data.entities:
+                blob = " ".join([entity.name, entity.summary]
+                                + list(entity.aliases))
+                count = len(pattern.findall(blob))
+                if count:
+                    rows.append(("Name", entity.name, count, sample(blob)))
+        return rows[:limit]
+
+    def replace_everywhere(self, needle: str, replacement: str, *,
+                           scopes: Sequence[str] = REPLACE_SCOPES,
+                           match_case: bool = False, whole_word: bool = True,
+                           regex: bool = False
+                           ) -> Tuple[int, int, List[Tuple[str, str]]]:
+        """
+        Do it. Returns (replacements, documents changed, problems).
+
+        Every document is snapshotted before it is touched, so File > Versions
+        can put any of them back one at a time. The manifest half of the
+        change goes on the undo stack with everything else.
+
+        A document that is open in Word is reported rather than forced: the
+        rest of the replace still happens, and the writer is told which files
+        to close and run it again.
+        """
+        if not needle:
+            return 0, 0, []
+        pattern = self.build_pattern(needle, match_case, whole_word, regex)
+        replaced = 0
+        documents = 0
+        problems: List[Tuple[str, str]] = []
+
+        def sweep(path: Path, label: str) -> None:
+            nonlocal replaced, documents
+            if not path.exists():
+                return
+            try:
+                if docxio.count_in_document(path, pattern) == 0:
+                    return
+                keep_rolling_copy(path)
+                from . import backup
+
+                backup.snapshot_document(self, path, label)
+                count = docxio.replace_in_document(path, pattern, replacement)
+            except Exception as exc:
+                problems.append((label, str(exc)))
+                return
+            if count:
+                replaced += count
+                documents += 1
+
+        if "manuscript" in scopes:
+            for scene in self.data.ordered_scenes():
+                if scene.docx:
+                    sweep(self.abs(scene.docx), scene.display)
+        if "notes" in scopes:
+            for note in self.data.notes:
+                if note.docx:
+                    sweep(self.abs(note.docx), note.title)
+        if "sheets" in scopes:
+            for entity in self.data.entities:
+                if entity.docx:
+                    sweep(self.abs(entity.docx), entity.name)
+
+        # Metadata lives in the manifest, so it is covered by undo.
+        def swap(value: str) -> str:
+            nonlocal replaced
+            new_value, count = pattern.subn(replacement, value or "")
+            replaced += count
+            return new_value
+
+        if "cards" in scopes:
+            for scene in self.data.scenes:
+                for field_name in ("synopsis", "notes", "goal", "conflict",
+                                   "disaster", "reaction", "dilemma",
+                                   "decision", "value_start", "value_end"):
+                    setattr(scene, field_name, swap(getattr(scene, field_name)))
+            for chapter in self.data.chapters:
+                chapter.synopsis = swap(chapter.synopsis)
+                chapter.notes = swap(chapter.notes)
+        if "names" in scopes:
+            for entity in self.data.entities:
+                entity.name = swap(entity.name)
+                entity.summary = swap(entity.summary)
+                entity.aliases = [swap(a) for a in entity.aliases]
+
+        # The word counts in the manifest are now stale wherever a document
+        # changed length - "Ada" to "Adalind" across 400 scenes moves the
+        # total. Re-reading is cheaper than being wrong about it.
+        if documents:
+            for scene in self.data.scenes:
+                if scene.docx:
+                    path = self.abs(scene.docx)
+                    if path.exists():
+                        scene.word_count = docxio.docx_word_count(path)
+                        scene.docx_mtime = docxio.docx_mtime(path)
+
+        if replaced:
+            self.mark_dirty()
+        return replaced, documents, problems
+
     def search(self, needle: str, limit: int = 200) -> List[Tuple[str, str, str]]:
         """
         Full-text search across scenes, sheets and notes.
