@@ -23,7 +23,14 @@ from ..config import (
     settings,
 )
 from ..model import CHARACTER_ROLES, SCENE_STATUSES
-from .widgets import Form, ScrollFrame, ScrolledText, center_window
+from .widgets import (
+    Form,
+    ScrollFrame,
+    ScrolledText,
+    WritingCheck,
+    add_editing_keys,
+    center_window,
+)
 
 
 # ==========================================================================
@@ -1040,6 +1047,8 @@ class OutlineWindow(tk.Toplevel):
             row=2, column=0, sticky="w")
         self.answer = ScrolledText(right, height=10, wrap="word")
         self.answer.grid(row=3, column=0, sticky="nsew", pady=(2, 8))
+        add_editing_keys(self.answer.text)
+        self.answer.nf_check = WritingCheck(self.answer.text)
 
         self.done_var = tk.BooleanVar()
         ttk.Checkbutton(right, text="Written", variable=self.done_var,

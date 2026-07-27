@@ -55,10 +55,11 @@ from ..project import Project, ProjectError, list_projects
 from . import dialogs
 from .widgets import (
     Form,
-    add_editing_keys,
     ScrollFrame,
     ScrolledText,
     StatusBar,
+    WritingCheck,
+    add_editing_keys,
     bind_tree_shortcuts,
     center_window,
     clamp_to_screen,
@@ -100,8 +101,7 @@ class App(tk.Tk):
         self._suppress_modified = False
         self._autosave_job: Optional[str] = None
         self._journal_job: Optional[str] = None
-        self._check_job: Optional[str] = None
-        self._writing_hits: List[Any] = []
+        self.editor_check: Optional[WritingCheck] = None
         self.live_check_var = tk.BooleanVar(value=settings["live_writing_check"])
         self._count_job: Optional[str] = None
         self._focus_job: Optional[str] = None
@@ -578,7 +578,11 @@ class App(tk.Tk):
         self.editor.text.bind("<Button-3>", self.on_editor_right_click)
         self.editor.text.bind("<Control-space>", self.cmd_complete)
         self._completion = None
-        self._style_writing_tags()
+        # The editor has its own richer right-click menu, so the checker's
+        # plain one stands aside.
+        self.editor.text.nf_owns_menu = True
+        self.editor_check = WritingCheck(self.editor.text, self.lexicon,
+                                         on_summary=self._on_check_summary)
         self._style_editor()
         self.editor.text.bind("<<Modified>>", self.on_editor_modified)
         self.editor.text.bind("<KeyRelease>", self.on_editor_key)
@@ -1048,6 +1052,10 @@ class App(tk.Tk):
         self._update_centre_meta(scene)
         self._build_scene_inspector(scene)
         self._schedule_focus()
+        # Loading text does not raise a key event, so the check has to be
+        # asked for - otherwise a scene only gets marked up once you type in
+        # it, which reads as "the checker is not working".
+        self._schedule_writing_check()
         self.editor.text.focus_set()
 
     def _update_centre_meta(self, scene) -> None:
@@ -1062,7 +1070,7 @@ class App(tk.Tk):
         data = self.project.data
         self.inspector.clear()
         self.inspector.scroll_to_top()
-        form = Form(self.inspector.body)
+        form = Form(self.inspector.body, self.lexicon)
         self._form = form
 
         form.heading("Scene")
@@ -1167,7 +1175,7 @@ class App(tk.Tk):
         self.centre_meta.configure(text=f"{words:,} words")
 
         self.inspector.clear()
-        form = Form(self.inspector.body)
+        form = Form(self.inspector.body, self.lexicon)
         self._form = form
         form.heading("Chapter")
         form.entry("Title", chapter, "title")
@@ -1210,7 +1218,7 @@ class App(tk.Tk):
         self.centre_meta.configure(text=f"{filled}/{len(fields)} fields")
 
         self.inspector.clear()
-        form = Form(self.inspector.body)
+        form = Form(self.inspector.body, self.lexicon)
         self._form = form
         form.heading(entity.type.title())
         form.entry("Name", entity, "name")
@@ -1258,7 +1266,7 @@ class App(tk.Tk):
         ])
         self.centre_meta.configure(text=note.kind)
         self.inspector.clear()
-        form = Form(self.inspector.body)
+        form = Form(self.inspector.body, self.lexicon)
         self._form = form
         form.heading("Note")
         form.entry("Title", note, "title")
@@ -1307,7 +1315,7 @@ class App(tk.Tk):
         ])
         self.centre_meta.configure(text=meta)
         self.inspector.clear()
-        form = Form(self.inspector.body)
+        form = Form(self.inspector.body, self.lexicon)
         self._form = None
         form.heading("Document")
         form.readonly("File", path.name)
@@ -1379,7 +1387,7 @@ class App(tk.Tk):
         )
 
         self.inspector.clear()
-        form = Form(self.inspector.body)
+        form = Form(self.inspector.body, self.lexicon)
         self._form = None
         form.heading("Map")
         form.readonly("Name", gm.name)
@@ -1419,7 +1427,7 @@ class App(tk.Tk):
         ])
         self.centre_meta.configure(text="written" if beat.done else "not written")
         self.inspector.clear()
-        form = Form(self.inspector.body)
+        form = Form(self.inspector.body, self.lexicon)
         self._form = form
         form.heading("Beat")
         form.readonly("Beat", beat.name)
@@ -1455,7 +1463,7 @@ class App(tk.Tk):
         ])
         self.centre_meta.configure(text=event.story_date)
         self.inspector.clear()
-        form = Form(self.inspector.body)
+        form = Form(self.inspector.body, self.lexicon)
         self._form = form
         form.heading("Event")
         form.entry("Title", event, "title")
@@ -2771,7 +2779,7 @@ class App(tk.Tk):
             ])
             self.centre_meta.configure(text=projection.headline())
             self.inspector.clear()
-            form = Form(self.inspector.body)
+            form = Form(self.inspector.body, self.lexicon)
             self._form = None
             form.heading("At a glance")
             form.readonly("Words", f"{data.word_count:,}")
@@ -3369,51 +3377,16 @@ class App(tk.Tk):
 
     def _schedule_writing_check(self) -> None:
         """Re-check the scene shortly after typing stops."""
-        if not settings["live_writing_check"]:
-            return
-        if self._check_job:
-            try:
-                self.after_cancel(self._check_job)
-            except (ValueError, tk.TclError):
-                pass
-        self._check_job = self.after(900, self._run_writing_check)
+        if self.editor_check:
+            self.editor_check.schedule()
 
     def _run_writing_check(self) -> None:
-        """
-        Underline what is worth looking at, without interrupting anything.
+        """Check now, rather than waiting for the idle timer."""
+        if self.editor_check:
+            self.editor_check.refresh()
 
-        Runs on the whole scene rather than the visible window: a scene is a
-        couple of thousand words, the rules are regular expressions, and the
-        cost is a few milliseconds. Doing it per-visible-line would mean
-        re-checking on every scroll for no benefit.
-        """
-        self._check_job = None
-        if not (self.project and self.current_scene_id):
-            return
-        if not settings["live_writing_check"]:
-            return
-        from .. import grammar
-
-        text = self.editor.get_value()
-        try:
-            hits = grammar.check(text, self.lexicon(), limit=200)
-        except Exception:
-            return
-        self._writing_hits = hits
-
-        widget = self.editor.text
-        for tag in ("nf_hard", "nf_soft"):
-            widget.tag_remove(tag, "1.0", "end")
-        for hit in hits:
-            start = f"1.0 + {hit.start}c"
-            end = f"1.0 + {hit.end}c"
-            try:
-                widget.tag_add(
-                    "nf_hard" if hit.severity == "hard" else "nf_soft",
-                    start, end)
-            except tk.TclError:
-                continue
-        counts = grammar.summarise(hits)
+    def _on_check_summary(self, counts: Dict[str, int]) -> None:
+        """Say what was found, so it is obvious the check is running at all."""
         if counts:
             self.status.say(
                 "  ".join(f"{kind}: {n}" for kind, n in sorted(counts.items()))
@@ -3421,44 +3394,20 @@ class App(tk.Tk):
         else:
             self.status.say("")
 
-    def _style_writing_tags(self) -> None:
-        """
-        Colours for the two kinds of mark, matched to the theme.
 
-        Underline rather than a coloured background: prose is the thing being
-        read, and a highlighter over every third word makes it unreadable. Tk
-        has no squiggly underline, so a plain one it is.
-        """
-        colours = THEMES.get(settings["theme"], THEMES["warm"])
-        widget = self.editor.text
-        try:
-            widget.tag_configure("nf_hard", underline=True,
-                                 foreground="#a4433a")
-            widget.tag_configure("nf_soft", underline=True,
-                                 foreground=colours.get("text_faint", "#8a8175"))
-            widget.tag_raise("sel")
-        except tk.TclError:
-            pass
+    @property
+    def _writing_hits(self):
+        return self.editor_check.hits if self.editor_check else []
 
     def _hit_at(self, index: str):
         """The finding under a text index, if any."""
-        try:
-            offset = len(self.editor.text.get("1.0", index))
-        except tk.TclError:
-            return None
-        for hit in getattr(self, "_writing_hits", []):
-            if hit.start <= offset < hit.end:
-                return hit
-        return None
+        return self.editor_check.hit_at(index) if self.editor_check else None
 
     def _apply_fix(self, hit) -> None:
-        widget = self.editor.text
-        widget.edit_separator()
-        widget.delete(f"1.0 + {hit.start}c", f"1.0 + {hit.end}c")
-        widget.insert(f"1.0 + {hit.start}c", hit.suggestion)
-        widget.edit_separator()
+        if not self.editor_check:
+            return
+        self.editor_check.apply(hit)
         self._editor_dirty = True
-        self._schedule_writing_check()
 
     def cmd_writing_check(self) -> None:
         """The full list for this scene, in one window."""
@@ -3508,15 +3457,19 @@ class App(tk.Tk):
         self.status.say(f"Fixed {len(safe)} spellings. Ctrl+Z undoes it.", 8)
 
     def cmd_toggle_live_check(self) -> None:
-        settings["live_writing_check"] = not settings["live_writing_check"]
+        settings["live_writing_check"] = bool(self.live_check_var.get())
+        if not self.editor_check:
+            return
         if settings["live_writing_check"]:
-            self._run_writing_check()
-            self.status.say("Live checking on.", 4)
+            self.editor_check.refresh()
+            self.status.say("Underlining mistakes as you type.", 5)
         else:
-            for tag in ("nf_hard", "nf_soft"):
-                self.editor.text.tag_remove(tag, "1.0", "end")
-            self._writing_hits = []
-            self.status.say("Live checking off.", 4)
+            self.editor_check.clear()
+            self.status.say("Live checking off. Shift+F7 still checks on "
+                            "demand.", 6)
+        # The inspector's fields have their own checkers; rebuilding the
+        # panel is the cheapest way to bring them into line.
+        self.render_selection()
 
     def cmd_lexicon_report(self) -> None:
         if not self.require_project():

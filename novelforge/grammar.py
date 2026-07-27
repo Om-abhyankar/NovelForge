@@ -267,6 +267,21 @@ class Hit:
         return "soft" if self.kind in SOFT_KINDS else "hard"
 
 
+def _claimed(lexicon, word: str) -> bool:
+    """
+    Has the writer deliberately claimed this word for their world?
+
+    Deliberately narrower than Lexicon.knows(): that returns True for any word
+    anywhere in the manuscript, which would mean a misspelling silences itself
+    the moment it is typed.
+    """
+    key = word.lower()
+    if key in getattr(lexicon, "accepted", ()):
+        return True
+    term = getattr(lexicon, "terms", {}).get(key)
+    return term is not None and term.kind != "invented"
+
+
 def _match_case(original: str, replacement: str) -> str:
     """Keep the writer's capitalisation when correcting a word."""
     if original.isupper() and len(original) > 1:
@@ -296,8 +311,13 @@ def check(text: str, lexicon=None, limit: int = 300) -> List[Hit]:
     # -- known misspellings ------------------------------------------------
     for match in _MISSPELL_PATTERN.finditer(text):
         word = match.group(1)
-        if lexicon is not None and lexicon.knows(word):
-            continue        # the writer has claimed this word for their world
+        # Only an *accepted* word or a declared name silences this. Asking the
+        # lexicon whether it "knows" the word would silence every one of them,
+        # because the lexicon learns from the manuscript - so a misspelling
+        # you have already typed would teach the checker to ignore it, which
+        # is precisely backwards.
+        if lexicon is not None and _claimed(lexicon, word):
+            continue
         correction = MISSPELLINGS[word.lower()]
         hits.append(Hit(match.start(), match.end(), "spelling", word,
                         f"\"{word}\" is a common misspelling.",

@@ -112,10 +112,14 @@ class Form:
     which the caller uses to decide whether to mark the project dirty.
     """
 
-    def __init__(self, parent: ttk.Frame) -> None:
+    def __init__(self, parent: ttk.Frame, get_lexicon=None) -> None:
         self.parent = parent
         self.rows: List[Dict[str, Any]] = []
         self._row_index = 0
+        #: Supplied by the application so the checker knows this book's names.
+        #: Without it the fields are still checked, just without the
+        #: "did you mean Iron Keep" half.
+        self.get_lexicon = get_lexicon
         parent.columnconfigure(1, weight=1)
 
     # -- construction ---------------------------------------------------
@@ -189,6 +193,12 @@ class Form:
         self._row_index += 1
         self.rows.append({"kind": "text", "widget": widget,
                           "obj": obj, "attr": attr})
+        # Every multi-line field is prose the writer typed - a synopsis, a
+        # character's history, a scene's conflict - so it gets the same
+        # checking the manuscript does. Attached here rather than at each of
+        # the thirty call sites, which is how one of them ends up missed.
+        add_editing_keys(widget)
+        widget.nf_check = WritingCheck(widget, self.get_lexicon)
         return widget
 
     def picker(self, label: str, obj: Any, attr: str,
@@ -566,6 +576,160 @@ def clamp_to_screen(window: tk.Misc, geometry: str) -> str:
     x = max(left, min(x, left + work_w - width - chrome_w))
     y = max(top, min(y, top + work_h - height - chrome_h))
     return f"{width}x{height}+{x}+{y}"
+
+
+class WritingCheck:
+    """
+    Live spelling, usage and grammar marks on any text box.
+
+    Attached to a widget rather than built into one screen, because a novelist
+    types in a lot more places than the manuscript: a scene synopsis, a
+    character's history, a beat plan, a research note. A checker that only
+    works in one of them is one the writer stops trusting.
+
+    Owns its own idle timer, its own tags and its own right-click menu, so
+    several can be alive at once without interfering.
+    """
+
+    HARD = "#a4433a"
+    SOFT = "#8a8175"
+
+    def __init__(self, text: tk.Text, get_lexicon=None, delay: int = 900,
+                 on_summary=None) -> None:
+        self.text = text
+        self.get_lexicon = get_lexicon
+        self.delay = delay
+        self.on_summary = on_summary
+        self.hits: List[Any] = []
+        self._job: Optional[str] = None
+
+        text.tag_configure("nf_hard", underline=True, foreground=self.HARD)
+        text.tag_configure("nf_soft", underline=True, foreground=self.SOFT)
+        try:
+            text.tag_raise("sel")
+        except tk.TclError:
+            pass
+
+        text.bind("<KeyRelease>", self._on_key, add="+")
+        text.bind("<Button-3>", self._on_right_click, add="+")
+
+    # -- lifecycle -------------------------------------------------------
+    def _on_key(self, _event=None) -> None:
+        self.schedule()
+
+    def schedule(self) -> None:
+        from ..config import settings
+
+        if not settings["live_writing_check"]:
+            self.clear()
+            return
+        if self._job:
+            try:
+                self.text.after_cancel(self._job)
+            except (ValueError, tk.TclError):
+                pass
+        self._job = self.text.after(self.delay, self.refresh)
+
+    def clear(self) -> None:
+        self.hits = []
+        for tag in ("nf_hard", "nf_soft"):
+            try:
+                self.text.tag_remove(tag, "1.0", "end")
+            except tk.TclError:
+                pass
+
+    def refresh(self) -> None:
+        """Re-check the whole box and redraw the marks."""
+        self._job = None
+        from ..config import settings
+
+        if not settings["live_writing_check"]:
+            self.clear()
+            return
+        from .. import grammar
+
+        try:
+            body = self.text.get("1.0", "end-1c")
+        except tk.TclError:
+            return
+        if not body.strip():
+            self.clear()
+            return
+        lex = None
+        if self.get_lexicon is not None:
+            try:
+                lex = self.get_lexicon()
+            except Exception:
+                lex = None
+        try:
+            self.hits = grammar.check(body, lex, limit=200)
+        except Exception:
+            self.hits = []
+            return
+
+        for tag in ("nf_hard", "nf_soft"):
+            self.text.tag_remove(tag, "1.0", "end")
+        for hit in self.hits:
+            try:
+                self.text.tag_add(
+                    "nf_hard" if hit.severity == "hard" else "nf_soft",
+                    f"1.0 + {hit.start}c", f"1.0 + {hit.end}c")
+            except tk.TclError:
+                continue
+        if self.on_summary:
+            try:
+                self.on_summary(grammar.summarise(self.hits))
+            except Exception:
+                pass
+
+    # -- interaction -----------------------------------------------------
+    def hit_at(self, index: str):
+        try:
+            offset = len(self.text.get("1.0", index))
+        except tk.TclError:
+            return None
+        for hit in self.hits:
+            if hit.start <= offset < hit.end:
+                return hit
+        return None
+
+    def apply(self, hit) -> None:
+        self.text.edit_separator()
+        self.text.delete(f"1.0 + {hit.start}c", f"1.0 + {hit.end}c")
+        self.text.insert(f"1.0 + {hit.start}c", hit.suggestion)
+        self.text.edit_separator()
+        self.text.event_generate("<<Modified>>")
+        self.schedule()
+
+    def _on_right_click(self, event) -> bool:
+        """A correction menu, unless the owner has its own richer one."""
+        if getattr(self.text, "nf_owns_menu", False):
+            return False
+        try:
+            self.text.mark_set("insert", f"@{event.x},{event.y}")
+        except tk.TclError:
+            return False
+        hit = self.hit_at("insert")
+        if hit is None:
+            return False
+        menu = tk.Menu(self.text, tearoff=0)
+        menu.add_command(label=hit.message, state="disabled")
+        if hit.suggestion:
+            menu.add_command(
+                label=f"Change to  '{' '.join(hit.suggestion.split())}'",
+                command=lambda: self.apply(hit))
+        menu.add_separator()
+        menu.add_command(label="Cut",
+                         command=lambda: self.text.event_generate("<<Cut>>"))
+        menu.add_command(label="Copy",
+                         command=lambda: self.text.event_generate("<<Copy>>"))
+        menu.add_command(label="Paste",
+                         command=lambda: self.text.event_generate("<<Paste>>"))
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+        return True
 
 
 def add_editing_keys(text: tk.Text) -> None:
