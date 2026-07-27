@@ -289,6 +289,16 @@ class App(tk.Tk):
                              command=self.cmd_add_event)
         menubar.add_cascade(label="Add", menu=add_menu)
 
+        self.edit_menu = tk.Menu(menubar, tearoff=0)
+        self.edit_menu.add_command(label="Undo", accelerator="Ctrl+Z",
+                                   command=self.cmd_undo)
+        self.edit_menu.add_command(label="Redo", accelerator="Ctrl+Y",
+                                   command=self.cmd_redo)
+        self.edit_menu.add_separator()
+        self.edit_menu.add_command(label="Open the Trash Folder",
+                                   command=self.cmd_open_trash)
+        menubar.add_cascade(label="Edit", menu=self.edit_menu)
+
         ms_menu = tk.Menu(menubar, tearoff=0)
         ms_menu.add_command(label="Compile Manuscript...", accelerator="F5",
                             command=self.cmd_compile)
@@ -580,6 +590,13 @@ class App(tk.Tk):
             "<Control-l>": lambda _e: self.cmd_outline_window(),
             "<Control-t>": lambda _e: self.cmd_timeline_window(),
             "<Control-m>": lambda _e: self.cmd_map_editor(),
+            "<Control-z>": self.cmd_undo,
+            "<Control-y>": self.cmd_redo,
+            "<Control-Shift-Z>": self.cmd_redo,
+            # Works even with the caret in the editor, where plain Ctrl+Z
+            # belongs to the text.
+            "<Control-Alt-z>": lambda _e: self.cmd_undo(),
+            "<Control-Alt-y>": lambda _e: self.cmd_redo(),
             "<Control-k>": lambda _e: self.cmd_corkboard(),
             "<Control-g>": lambda _e: self.cmd_story_graph(),
             "<Control-i>": lambda _e: self.cmd_idea_inbox(),
@@ -627,6 +644,7 @@ class App(tk.Tk):
         """
         self._offer_recovery()
         self._restore_position()
+        self._sync_history_menu()
 
     def _show_welcome(self) -> None:
         self._show_detail(
@@ -2148,34 +2166,38 @@ class App(tk.Tk):
         ).show()
         if not new or new == current:
             return
-        if kind == "scene":
-            self.project.rename_scene(ident, new)
-        elif kind == "chapter":
-            self.project.rename_chapter(ident, new)
-        elif kind == "entity":
-            self.project.rename_entity(ident, new)
-        elif kind == "note":
-            note = data.note(ident)
-            if note:
-                note.title = new
-                self.project.mark_dirty()
+        with self.project.action(f"rename to '{new}'"):
+            if kind == "scene":
+                self.project.rename_scene(ident, new)
+            elif kind == "chapter":
+                self.project.rename_chapter(ident, new)
+            elif kind == "entity":
+                self.project.rename_entity(ident, new)
+            elif kind == "note":
+                note = data.note(ident)
+                if note:
+                    note.title = new
+                    self.project.mark_dirty()
         self.project.save()
         self.refresh_tree()
         self.render_selection()
+        self._sync_history_menu()
 
     def cmd_move(self, delta: int) -> None:
         if not self.require_project():
             return
         self.commit_all()
         kind, ident = self.selection_kind, self.selection_id
-        if kind == "scene":
-            self.project.move_scene(ident, delta)
-        elif kind == "chapter":
-            self.project.move_chapter(ident, delta)
-        else:
+        if kind not in ("scene", "chapter"):
             return
+        with self.project.action("move " + ("up" if delta < 0 else "down")):
+            if kind == "scene":
+                self.project.move_scene(ident, delta)
+            else:
+                self.project.move_chapter(ident, delta)
         self.project.save()
         self.refresh_tree()
+        self._sync_history_menu()
 
     def cmd_move_to_chapter(self) -> None:
         if not self.require_project() or self.selection_kind != "scene":
@@ -2191,9 +2213,11 @@ class App(tk.Tk):
         ).show()
         if not chosen:
             return
-        self.project.reassign_scene(self.selection_id, chosen)
+        with self.project.action("move scene to another chapter"):
+            self.project.reassign_scene(self.selection_id, chosen)
         self.project.save()
         self.refresh_tree()
+        self._sync_history_menu()
 
     def cmd_delete(self) -> None:
         if not self.require_project():
@@ -2252,16 +2276,17 @@ class App(tk.Tk):
             return
         delete_files = bool(answer)
 
-        if kind == "scene":
-            self.project.delete_scene(ident, delete_files=delete_files)
-            if self.current_scene_id == ident:
-                self.current_scene_id = ""
-        elif kind == "chapter":
-            self.project.delete_chapter(ident, delete_files=delete_files)
-        elif kind == "entity":
-            self.project.delete_entity(ident, delete_files=delete_files)
-        elif kind == "note":
-            self.project.delete_note(ident, delete_files=delete_files)
+        with self.project.action(f"delete {label}"):
+            if kind == "scene":
+                self.project.delete_scene(ident, delete_files=delete_files)
+                if self.current_scene_id == ident:
+                    self.current_scene_id = ""
+            elif kind == "chapter":
+                self.project.delete_chapter(ident, delete_files=delete_files)
+            elif kind == "entity":
+                self.project.delete_entity(ident, delete_files=delete_files)
+            elif kind == "note":
+                self.project.delete_note(ident, delete_files=delete_files)
 
         self.selection_kind = self.selection_id = ""
         self._form = None
@@ -2269,17 +2294,23 @@ class App(tk.Tk):
         self.refresh_tree()
         self.refresh_counters()
         self.cmd_dashboard(in_pane=True)
+        self._sync_history_menu()
         self.status.say(
-            "Removed." + (" Files deleted." if delete_files
-                          else " Files kept on disk."), 8
+            "Removed. " + ("The documents are in the Trash folder, not gone."
+                           if delete_files else "Files kept where they were.")
+            + "  Ctrl+Z puts it back.", 10
         )
 
     def cmd_apply_inspector(self) -> None:
-        if self.commit_inspector():
-            if self.project:
-                self.project.save()
+        if not self.project:
+            return
+        with self.project.action("that edit"):
+            changed = self.commit_inspector()
+        if changed:
+            self.project.save()
             self.status.say("Applied.", 3)
             self.render_selection()
+            self._sync_history_menu()
         else:
             self.status.say("Nothing changed.", 3)
 
@@ -2920,6 +2951,112 @@ class App(tk.Tk):
 
     def cmd_continuity(self) -> None:
         self.cmd_story_graph("continuity")
+
+    # ------------------------------------------------------------------
+    # Undo of structural edits
+    # ------------------------------------------------------------------
+
+    def _typing(self) -> bool:
+        """
+        Is the caret somewhere that owns Ctrl+Z already?
+
+        Only Text widgets: those have a real undo stack, and Tk has already
+        run it by the time this fires. Entry and Combobox have no undo of
+        their own, so Ctrl+Z in the inspector should undo the last structural
+        edit rather than silently doing nothing - which is what it did when
+        this was too broad.
+        """
+        try:
+            focus = self.focus_get()
+        except (KeyError, tk.TclError):
+            return False
+        return isinstance(focus, tk.Text)
+
+    def cmd_undo(self, event=None):
+        """
+        Undo the last structural change - rename, move, delete, field edit.
+
+        Typing has its own undo inside the text widget, and Tk has already run
+        it by the time a Ctrl+Z *keypress* reaches here, so a keypress in the
+        editor is left alone rather than undoing two things at once.
+
+        Choosing Edit > Undo from the menu always undoes structure, whatever
+        has focus. Without that distinction the menu item was dead most of the
+        time: renaming something leaves the caret back in the editor, so the
+        one moment you want to undo a rename is the moment focus says "this
+        is typing".
+        """
+        if event is not None and self._typing():
+            return None
+        if not self.project:
+            return None
+        label = self.project.undo()
+        if label is None:
+            self.status.say("Nothing left to undo.", 4)
+            return "break"
+        self._after_history_change(f"Undone: {label}")
+        return "break"
+
+    def cmd_redo(self, event=None):
+        if event is not None and self._typing():
+            return None
+        if not self.project:
+            return None
+        label = self.project.redo()
+        if label is None:
+            self.status.say("Nothing to redo.", 4)
+            return "break"
+        self._after_history_change(f"Redone: {label}")
+        return "break"
+
+    def _after_history_change(self, message: str) -> None:
+        """Rebuild everything the manifest feeds after an undo or redo."""
+        from .. import storygraph
+
+        storygraph.invalidate(self.project)
+        self.project.save()
+        # The open scene may have been deleted, or its text replaced.
+        if self.current_scene_id and not self.project.data.scene(
+                self.current_scene_id):
+            self.current_scene_id = ""
+            self.selection_kind = self.selection_id = ""
+        self._form = None
+        self.refresh_tree()
+        self.render_selection()
+        self.refresh_counters()
+        self._sync_history_menu()
+        self.status.say(message, 8)
+
+    def _sync_history_menu(self) -> None:
+        """Show what Ctrl+Z would actually undo, rather than a bare 'Undo'."""
+        if not hasattr(self, "edit_menu"):
+            return
+        history = self.project.history if self.project else None
+        try:
+            if history and history.can_undo:
+                self.edit_menu.entryconfigure(
+                    0, label=f"Undo {history.undo_label()}", state="normal")
+            else:
+                self.edit_menu.entryconfigure(0, label="Undo", state="disabled")
+            if history and history.can_redo:
+                self.edit_menu.entryconfigure(
+                    1, label=f"Redo {history.redo_label()}", state="normal")
+            else:
+                self.edit_menu.entryconfigure(1, label="Redo", state="disabled")
+        except tk.TclError:
+            pass
+
+    def cmd_open_trash(self) -> None:
+        """Deleted documents are moved here, not destroyed."""
+        if not self.require_project():
+            return
+        folder = self.project.folder("trash")
+        count = len(list(folder.glob("*")))
+        reveal_in_explorer(folder)
+        self.status.say(
+            f"The trash holds {count} deleted "
+            f"{'item' if count == 1 else 'items'}. Nothing here is removed "
+            f"automatically.", 10)
 
     def cmd_verify_project(self) -> None:
         """One button: what is here, what is broken, and a score out of 100."""

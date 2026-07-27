@@ -74,6 +74,7 @@ FOLDERS: Dict[str, str] = {
     "snapshots": "_Snapshots",
     "backups": "_Backups",
     "drafts": "_Drafts",
+    "trash": "_Trash",
 }
 
 MANIFEST_NAME = "project.json"

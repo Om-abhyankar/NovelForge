@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 import shutil
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from . import SCHEMA_VERSION
 from .atomic import (
@@ -41,6 +41,7 @@ from .model import (
     TimelineEvent,
     now_iso,
 )
+from .undo import Action, UndoStack
 
 BRACKET_TAG = re.compile(r"\[([^\]\n]{2,120})\]")
 
@@ -61,6 +62,82 @@ class Project:
         self.root = Path(root)
         self.data = data
         self._dirty = False
+
+        self.history = UndoStack()
+        self._action_depth = 0
+        self._action_label = ""
+        self._undo_before: Optional[Dict[str, Any]] = None
+        self._file_moves: List[Tuple[str, str]] = []
+
+    # ------------------------------------------------------------------
+    # Undo
+    # ------------------------------------------------------------------
+
+    def action(self, label: str) -> Action:
+        """Wrap a structural change so it can be undone. See undo.Action."""
+        return Action(self, label)
+
+    def _trash(self, path: Path) -> Optional[Path]:
+        """
+        Move a document to _Trash instead of deleting it.
+
+        Recorded so undo can put it back, and worth doing on its own account:
+        "delete the files too" stops being a one-way door.
+        """
+        path = Path(path)
+        if not path.exists():
+            return None
+        destination = unique_path(self.folder("trash") / path.name)
+        try:
+            shutil.move(str(path), str(destination))
+        except OSError:
+            return None
+        self._file_moves.append((str(path), str(destination)))
+        return destination
+
+    def _apply_moves(self, moves: Sequence[Tuple[str, str]],
+                     forward: bool) -> None:
+        """Replay recorded file moves, or reverse them for an undo."""
+        ordered = list(moves) if forward else list(reversed(moves))
+        for origin, destination in ordered:
+            source, target = (origin, destination) if forward \
+                else (destination, origin)
+            try:
+                if not Path(source).exists():
+                    continue
+                Path(target).parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(source), str(target))
+            except OSError:
+                # A file that cannot be moved back leaves the manifest
+                # pointing at nothing, which Verify This Project reports.
+                # Better than aborting the whole undo halfway through.
+                continue
+
+    def restore_snapshot(self, manifest: Dict[str, Any],
+                         moves: Sequence[Tuple[str, str]] = ()) -> None:
+        """Put the manifest back and reverse any file moves it came with."""
+        self.data = ProjectData.from_json(manifest)
+        self._apply_moves(moves, forward=False)
+        self.mark_dirty()
+
+    def undo(self) -> Optional[str]:
+        """Step back one structural change. Returns its label, or None."""
+        entry = self.history.undo()
+        if entry is None:
+            return None
+        self.data = ProjectData.from_json(entry.before)
+        self._apply_moves(entry.moves, forward=False)
+        self.mark_dirty()
+        return entry.label
+
+    def redo(self) -> Optional[str]:
+        entry = self.history.redo()
+        if entry is None:
+            return None
+        self.data = ProjectData.from_json(entry.after)
+        self._apply_moves(entry.moves, forward=True)
+        self.mark_dirty()
+        return entry.label
 
     # -- paths ----------------------------------------------------------
     def folder(self, key: str) -> Path:
@@ -292,7 +369,11 @@ class Project:
         if delete_files and chapter.folder:
             target = self.abs(chapter.folder)
             if target.is_dir():
-                shutil.rmtree(target, ignore_errors=True)
+                # Moved rather than rmtree'd: the scenes inside have already
+                # gone to _Trash individually, but anything the writer put in
+                # the folder by hand would otherwise be destroyed outright,
+                # and there would be nothing for undo to restore.
+                self._trash(target)
         self._renumber(self.data.chapters)
         self.mark_dirty()
 
@@ -410,11 +491,7 @@ class Project:
             if event.scene_id == scene_id:
                 event.scene_id = ""
         if delete_files and scene.docx:
-            target = self.abs(scene.docx)
-            try:
-                target.unlink(missing_ok=True)
-            except OSError:
-                pass
+            self._trash(self.abs(scene.docx))
         self._renumber(self.data.scenes_in(chapter_id))
         self.mark_dirty()
 
@@ -574,7 +651,7 @@ class Project:
                 event.location_id = ""
         if delete_files and entity.docx:
             try:
-                self.abs(entity.docx).unlink(missing_ok=True)
+                self._trash(self.abs(entity.docx))
             except OSError:
                 pass
         self._renumber(self.data.entities_of(entity.type))
@@ -688,7 +765,7 @@ class Project:
         self.data.notes = [n for n in self.data.notes if n.id != note_id]
         if delete_files and note.docx:
             try:
-                self.abs(note.docx).unlink(missing_ok=True)
+                self._trash(self.abs(note.docx))
             except OSError:
                 pass
         self.mark_dirty()
