@@ -404,8 +404,14 @@ class PreferencesDialog(Dialog):
         add("Autosave seconds", "autosave_seconds", [10, 15, 20, 30, 45, 60, 120])
         add("Typewriter scrolling", "typewriter_scroll")
 
+        heading("Checking as you write")
+        add("Underline mistakes as I type", "live_writing_check")
+
         heading("Sprints")
         add("Sprint minutes", "sprint_minutes", [5, 10, 15, 20, 25, 30, 45, 60])
+
+        heading("Maps")
+        add("Ask before closing an unsaved map", "map_prompt_on_close")
 
         heading("Manuscript output")
         add("Manuscript font", "manuscript_font",

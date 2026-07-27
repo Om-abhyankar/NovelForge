@@ -1995,7 +1995,16 @@ class App(tk.Tk):
             self._apply_theme()
             self.focus_var.set(bool(settings["focus_mode"]))
             self.typewriter_var.set(bool(settings["typewriter_scroll"]))
+            # Keep the Tools menu tick and the live marks in step with what
+            # the dialog just wrote, or the two disagree until a restart.
+            self.live_check_var.set(bool(settings["live_writing_check"]))
+            if self.editor_check:
+                if settings["live_writing_check"]:
+                    self.editor_check.refresh()
+                else:
+                    self.editor_check.clear()
             self._apply_focus()
+            self.render_selection()
             self.status.say("Preferences saved.", 5)
 
     def cmd_open_folder(self) -> None:
