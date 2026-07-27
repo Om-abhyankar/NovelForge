@@ -1,0 +1,460 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   NovelForge design tokens
+
+   Dark is the primary experience. Every value is a CSS variable so themes
+   swap without a single component knowing about it.
+
+   Colours are stored as raw `R G B` triplets rather than hex so Tailwind can
+   apply opacity to any of them: `bg-surface/60`, `text-gold/80`.
+   ========================================================================== */
+
+@layer base {
+  :root,
+  [data-theme='dark'] {
+    /* -- surfaces, by elevation ------------------------------------- */
+    --canvas: 13 17 23;          /* #0D1117  the window itself        */
+    --surface: 21 27 35;         /* #151B23  panels, sidebars         */
+    --card: 28 36 48;            /* #1C2430  raised cards             */
+    --raised: 35 45 59;          /* one step above a card             */
+    --overlay: 18 23 31;         /* dialogs, popovers                 */
+    --sunken: 10 13 18;          /* wells, inputs, code               */
+
+    /* -- ink --------------------------------------------------------- */
+    --ink: 255 255 255;          /* #FFFFFF  primary text             */
+    --ink-2: 184 192 204;        /* #B8C0CC  secondary                */
+    --ink-3: 126 135 149;        /* #7E8795  muted                    */
+    --ink-4: 88 96 108;          /* disabled, placeholder             */
+
+    /* -- accents ------------------------------------------------------ */
+    --gold: 212 175 55;          /* #D4AF37  primary accent           */
+    --gold-soft: 58 48 20;       /* gold at low elevation             */
+    --indigo: 124 108 255;       /* #7C6CFF  secondary accent         */
+    --indigo-soft: 38 34 74;
+
+    --success: 93 211 158;       /* #5DD39E */
+    --warning: 255 181 71;       /* #FFB547 */
+    --danger: 255 93 115;        /* #FF5D73 */
+    --info: 108 168 255;
+
+    /* -- lines --------------------------------------------------------
+       Borders are almost invisible on purpose. Depth comes from surface
+       contrast and shadow, not from drawn lines. */
+    --line: 255 255 255;         /* used at 6-10% opacity              */
+    --line-strong: 255 255 255;  /* used at 14%                        */
+    --ring: 212 175 55;          /* focus ring                         */
+
+    /* -- editor ------------------------------------------------------- */
+    --page: 15 20 27;            /* the writing surface                */
+    --page-ink: 232 234 238;     /* prose colour - never pure white,
+                                    which glares over a long session   */
+    --selection: 124 108 255;
+    --caret: 212 175 55;
+
+    /* -- geometry ----------------------------------------------------- */
+    --r-sm: 8px;
+    --r: 12px;
+    --r-lg: 16px;
+    --r-xl: 20px;
+    --r-2xl: 28px;
+
+    /* -- elevation ----------------------------------------------------
+       Two-layer shadows: a tight contact shadow plus a wide ambient one.
+       A single blurred box-shadow is the classic cheap-software tell. */
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.28), 0 1px 1px rgb(0 0 0 / 0.16);
+    --shadow: 0 2px 4px rgb(0 0 0 / 0.28), 0 6px 16px -4px rgb(0 0 0 / 0.36);
+    --shadow-lg: 0 4px 8px rgb(0 0 0 / 0.3), 0 18px 40px -12px rgb(0 0 0 / 0.5);
+    --shadow-xl: 0 8px 16px rgb(0 0 0 / 0.32), 0 32px 72px -20px rgb(0 0 0 / 0.62);
+    --shadow-glow: 0 0 0 1px rgb(212 175 55 / 0.16),
+                   0 8px 32px -8px rgb(212 175 55 / 0.22);
+
+    /* -- motion -------------------------------------------------------
+       One easing curve for almost everything. Mixed curves read as
+       inconsistent even when nobody can say why. */
+    --ease: cubic-bezier(0.32, 0.72, 0, 1);
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+    --fast: 120ms;
+    --normal: 200ms;
+    --slow: 320ms;
+
+    color-scheme: dark;
+  }
+
+  /* ------------------------------------------------------------------
+     Light theme. Not an inversion - a separate design. Inverted dark
+     themes always look washed out because shadows stop working.
+     ------------------------------------------------------------------ */
+  [data-theme='light'] {
+    --canvas: 247 247 245;
+    --surface: 255 255 255;
+    --card: 255 255 255;
+    --raised: 250 250 249;
+    --overlay: 255 255 255;
+    --sunken: 241 241 238;
+
+    --ink: 23 25 29;
+    --ink-2: 82 88 98;
+    --ink-3: 122 128 138;
+    --ink-4: 163 168 176;
+
+    --gold: 158 124 20;
+    --gold-soft: 250 243 222;
+    --indigo: 88 72 224;
+    --indigo-soft: 238 236 254;
+
+    --success: 32 132 92;
+    --warning: 166 106 12;
+    --danger: 196 48 68;
+    --info: 40 104 190;
+
+    --line: 15 20 30;
+    --line-strong: 15 20 30;
+    --ring: 158 124 20;
+
+    --page: 255 255 255;
+    --page-ink: 28 30 34;
+    --selection: 88 72 224;
+    --caret: 158 124 20;
+
+    --shadow-sm: 0 1px 2px rgb(15 20 30 / 0.06), 0 1px 1px rgb(15 20 30 / 0.04);
+    --shadow: 0 2px 4px rgb(15 20 30 / 0.05), 0 6px 16px -4px rgb(15 20 30 / 0.1);
+    --shadow-lg: 0 4px 8px rgb(15 20 30 / 0.06), 0 18px 40px -12px rgb(15 20 30 / 0.14);
+    --shadow-xl: 0 8px 16px rgb(15 20 30 / 0.08), 0 32px 72px -20px rgb(15 20 30 / 0.18);
+    --shadow-glow: 0 0 0 1px rgb(158 124 20 / 0.2),
+                   0 8px 32px -8px rgb(158 124 20 / 0.18);
+
+    color-scheme: light;
+  }
+
+  /* Midnight: cooler and deeper than Dark, with an indigo cast. For writing
+     at night without the warm gold pulling at your eye. */
+  [data-theme='midnight'] {
+    --canvas: 11 13 22;
+    --surface: 16 19 32;
+    --card: 22 26 43;
+    --raised: 30 35 56;
+    --overlay: 15 18 30;
+    --sunken: 8 10 17;
+
+    --ink: 233 235 245;
+    --ink-2: 172 179 202;
+    --ink-3: 118 126 152;
+    --ink-4: 84 91 114;
+
+    --gold: 196 165 92;
+    --gold-soft: 48 42 24;
+    --indigo: 139 126 255;
+    --indigo-soft: 34 32 72;
+
+    --success: 92 206 165;
+    --warning: 240 178 92;
+    --danger: 246 104 126;
+    --info: 122 168 255;
+
+    --line: 200 210 255;
+    --line-strong: 200 210 255;
+    --ring: 139 126 255;
+
+    --page: 14 17 28;
+    --page-ink: 226 229 240;
+    --selection: 139 126 255;
+    --caret: 139 126 255;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 1px rgb(0 0 0 / 0.24);
+    --shadow: 0 2px 4px rgb(0 0 0 / 0.4), 0 6px 16px -4px rgb(0 0 0 / 0.48);
+    --shadow-lg: 0 4px 8px rgb(0 0 0 / 0.42), 0 18px 40px -12px rgb(0 0 0 / 0.62);
+    --shadow-xl: 0 8px 16px rgb(0 0 0 / 0.45), 0 32px 72px -20px rgb(0 0 0 / 0.72);
+    --shadow-glow: 0 0 0 1px rgb(139 126 255 / 0.18),
+                   0 8px 32px -8px rgb(139 126 255 / 0.24);
+
+    color-scheme: dark;
+  }
+
+  /* AMOLED: true black, so unlit pixels stay off on an OLED panel. Surfaces
+     are separated by hairlines rather than by lifting them off black, which
+     would defeat the entire point. */
+  [data-theme='amoled'] {
+    --canvas: 0 0 0;
+    --surface: 0 0 0;
+    --card: 10 10 10;
+    --raised: 20 20 20;
+    --overlay: 6 6 6;
+    --sunken: 0 0 0;
+
+    --ink: 255 255 255;
+    --ink-2: 196 196 196;
+    --ink-3: 138 138 138;
+    --ink-4: 100 100 100;
+
+    --gold: 224 188 74;
+    --gold-soft: 38 31 8;
+    --indigo: 148 134 255;
+    --indigo-soft: 24 20 50;
+
+    --success: 90 220 160;
+    --warning: 255 190 80;
+    --danger: 255 106 128;
+    --info: 118 174 255;
+
+    --line: 255 255 255;
+    --line-strong: 255 255 255;
+    --ring: 224 188 74;
+
+    --page: 0 0 0;
+    --page-ink: 226 226 226;
+    --selection: 224 188 74;
+    --caret: 224 188 74;
+
+    /* Shadows are invisible against pure black, so elevation is carried by
+       borders instead. Keeping soft shadows here would just waste paint. */
+    --shadow-sm: 0 0 0 1px rgb(255 255 255 / 0.06);
+    --shadow: 0 0 0 1px rgb(255 255 255 / 0.08);
+    --shadow-lg: 0 0 0 1px rgb(255 255 255 / 0.1);
+    --shadow-xl: 0 0 0 1px rgb(255 255 255 / 0.14);
+    --shadow-glow: 0 0 0 1px rgb(224 188 74 / 0.3);
+
+    color-scheme: dark;
+  }
+
+  /* Sepia: for very long drafting sessions. Warm, low contrast, no glare. */
+  [data-theme='sepia'] {
+    --canvas: 240 233 220;
+    --surface: 248 243 233;
+    --card: 252 248 240;
+    --raised: 245 239 227;
+    --overlay: 252 248 240;
+    --sunken: 234 226 209;
+
+    --ink: 46 36 25;
+    --ink-2: 107 92 71;
+    --ink-3: 135 119 89;
+    --ink-4: 166 150 121;
+
+    --gold: 138 90 43;
+    --gold-soft: 236 223 198;
+    --indigo: 92 78 150;
+    --indigo-soft: 232 228 242;
+
+    --success: 79 122 69;
+    --warning: 154 111 30;
+    --danger: 156 68 54;
+    --info: 74 107 138;
+
+    --line: 46 36 25;
+    --line-strong: 46 36 25;
+    --ring: 138 90 43;
+
+    --page: 251 244 228;
+    --page-ink: 46 36 25;
+    --selection: 138 90 43;
+    --caret: 138 90 43;
+
+    --shadow-sm: 0 1px 2px rgb(70 55 35 / 0.07), 0 1px 1px rgb(70 55 35 / 0.05);
+    --shadow: 0 2px 4px rgb(70 55 35 / 0.06), 0 6px 16px -4px rgb(70 55 35 / 0.12);
+    --shadow-lg: 0 4px 8px rgb(70 55 35 / 0.08), 0 18px 40px -12px rgb(70 55 35 / 0.16);
+    --shadow-xl: 0 8px 16px rgb(70 55 35 / 0.1), 0 32px 72px -20px rgb(70 55 35 / 0.2);
+    --shadow-glow: 0 0 0 1px rgb(138 90 43 / 0.2),
+                   0 8px 32px -8px rgb(138 90 43 / 0.18);
+
+    color-scheme: light;
+  }
+
+  /* ------------------------------------------------------------------
+     Base element styles
+     ------------------------------------------------------------------ */
+  * {
+    border-color: rgb(var(--line) / 0.08);
+  }
+
+  html,
+  body {
+    height: 100%;
+    overflow: hidden; /* the app manages its own scroll regions */
+  }
+
+  body {
+    background-color: rgb(var(--canvas));
+    color: rgb(var(--ink));
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+    font-variant-ligatures: contextual;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+
+  /* Numbers that line up in tables and counters. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background-color: rgb(var(--selection) / 0.32);
+    color: rgb(var(--ink));
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--ring) / 0.7);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Scrollbars. The default Windows scrollbar is the loudest cheap-software
+     tell there is, so it is replaced everywhere. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--ink) / 0.14);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--ink) / 0.26);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Everything respects a reduced-motion preference. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ==========================================================================
+   Component layer
+   ========================================================================== */
+
+@layer components {
+  /* A raised surface. The hairline inset highlight along the top edge is what
+     makes a card read as lit from above rather than as a flat rectangle. */
+  .surface-card {
+    background-color: rgb(var(--card));
+    border: 1px solid rgb(var(--line) / 0.07);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow), inset 0 1px 0 0 rgb(255 255 255 / 0.04);
+  }
+
+  [data-theme='light'] .surface-card,
+  [data-theme='sepia'] .surface-card {
+    box-shadow: var(--shadow), inset 0 1px 0 0 rgb(255 255 255 / 0.7);
+  }
+
+  /* Used sparingly, on floating panels only, exactly as specified. */
+  .glass {
+    background-color: rgb(var(--overlay) / 0.72);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgb(var(--line) / 0.1);
+  }
+
+  /* Ambient light bloom behind hero elements. Pure decoration, zero cost. */
+  .bloom::before {
+    content: '';
+    position: absolute;
+    inset: -40% -20% auto -20%;
+    height: 340px;
+    background: radial-gradient(
+      60% 60% at 50% 0%,
+      rgb(var(--gold) / 0.1) 0%,
+      rgb(var(--indigo) / 0.06) 40%,
+      transparent 72%
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .hairline {
+    background-image: linear-gradient(
+      to right,
+      transparent,
+      rgb(var(--line) / 0.12) 12%,
+      rgb(var(--line) / 0.12) 88%,
+      transparent
+    );
+  }
+
+  /* Loading skeleton. A travelling sheen, not a pulsing block. */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: rgb(var(--ink) / 0.05);
+    border-radius: var(--r-sm);
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--ink) / 0.07),
+      transparent
+    );
+    animation: shimmer 1.6s var(--ease) infinite;
+  }
+
+  /* Prose. The editor should read like a printed novel. */
+  .prose-editor {
+    color: rgb(var(--page-ink));
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: 1.1875rem;
+    line-height: 1.78;
+    letter-spacing: 0.003em;
+    hanging-punctuation: first last;
+  }
+  .prose-editor p {
+    margin: 0;
+    text-indent: 1.6em;
+  }
+  .prose-editor p:first-of-type,
+  .prose-editor p.no-indent {
+    text-indent: 0;
+  }
+  /* Paragraphs carry no margin, so this rule alone sets the gap around a
+     scene break. 1.9em top and bottom compounded to nearly four blank lines
+     on the page; 0.85em reads as the intended single beat of silence. */
+  .prose-editor .scene-break {
+    text-indent: 0;
+    text-align: center;
+    margin: 0.85em 0;
+    color: rgb(var(--ink-3));
+    letter-spacing: 0.6em;
+  }
+}
+
+@layer utilities {
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+  .no-select {
+    user-select: none;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}

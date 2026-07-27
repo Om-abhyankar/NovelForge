@@ -1,0 +1,93 @@
+# ==========================================================================
+# NovelForge
+#
+# NOTE: novelforge/web/ is deliberately NOT ignored. It holds the built UI and
+# is what lets people run the app with Python alone, no Node required. If you
+# add it here, every user will need Node and npm install.
+# ==========================================================================
+
+# -- your writing ----------------------------------------------------------
+# Never commit anyone's novel. Projects live here by default.
+/Projects/
+*.map.json
+!web/**/*.map.json
+
+# Anything a project generates
+_Backups/
+_Snapshots/
+_Compiled/
+_Drafts/
+_Trash/
+*.docx
+*.docx.bak
+*.tmp~
+project.json
+project.json.bak
+
+# Local preferences and machine state
+novelforge-settings.json
+novelforge-session.json
+novelforge-errors.log
+
+# -- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# -- Node / Next -----------------------------------------------------------
+node_modules/
+web/.next/
+web/out/
+web/.turbo/
+.pnpm-store/
+*.tsbuildinfo
+next-env.d.ts
+.eslintcache
+
+# Playwright, used only for development screenshots
+test-results/
+playwright-report/
+/ms-playwright/
+
+# -- editors and OS --------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# -- logs ------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
