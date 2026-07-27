@@ -418,6 +418,10 @@ class ProjectData:
     notes: List[Note] = field(default_factory=list)
     sessions: List[Session] = field(default_factory=list)
     ideas: List[Idea] = field(default_factory=list)
+    #: Invented words the writer has accepted - place names, magic terms,
+    #: anything the general language would call a mistake. This is how the
+    #: tool learns your world instead of arguing with it.
+    accepted_words: List[str] = field(default_factory=list)
 
     created: str = field(default_factory=now_iso)
     modified: str = field(default_factory=now_iso)
@@ -453,6 +457,7 @@ class ProjectData:
             "notes": [to_dict(n) for n in self.notes],
             "sessions": [to_dict(s) for s in self.sessions],
             "ideas": [to_dict(i) for i in self.ideas],
+            "accepted_words": list(self.accepted_words),
             "created": self.created,
             "modified": self.modified,
             "opened": self.opened,

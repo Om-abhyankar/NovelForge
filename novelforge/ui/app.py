@@ -13,6 +13,7 @@ Kept fast by three rules:
 
 from __future__ import annotations
 
+import re
 import tkinter as tk
 import traceback
 from contextlib import contextmanager
@@ -350,6 +351,11 @@ class App(tk.Tk):
         tools_menu.add_command(label="Writer's Block Diagnostic",
                                command=self.cmd_block_diagnostic)
         tools_menu.add_separator()
+        tools_menu.add_command(label="Check Names in This Scene",
+                               command=self.cmd_check_names)
+        tools_menu.add_command(label="What the Editor Knows...",
+                               command=self.cmd_lexicon_report)
+        tools_menu.add_separator()
         tools_menu.add_command(label="Verify This Project", accelerator="F4",
                                command=self.cmd_verify_project)
         tools_menu.add_command(label="Continuity Check", accelerator="F10",
@@ -559,6 +565,9 @@ class App(tk.Tk):
 
         self.editor.grid(row=1, column=0, sticky="nsew")
         add_editing_keys(self.editor.text)
+        self.editor.text.bind("<Button-3>", self.on_editor_right_click)
+        self.editor.text.bind("<Control-space>", self.cmd_complete)
+        self._completion = None
         self._style_editor()
         self.editor.text.bind("<<Modified>>", self.on_editor_modified)
         self.editor.text.bind("<KeyRelease>", self.on_editor_key)
@@ -3196,6 +3205,276 @@ class App(tk.Tk):
         editor = MapEditor(self, self.project, on_change)
         if map_path is not None and Path(map_path).exists():
             editor._open_map(Path(map_path))
+
+    # ------------------------------------------------------------------
+    # The editor's knowledge of this book
+    # ------------------------------------------------------------------
+
+    def lexicon(self, rebuild: bool = False):
+        """
+        The project's own vocabulary, built once and reused.
+
+        Rebuilt when the manuscript changes, which the story graph already
+        tracks, so this rides on that rather than re-reading anything.
+        """
+        from .. import lexicon as lex_module
+        from .. import storygraph
+
+        graph = storygraph.cached_graph(self.project)
+        signature = (id(graph) if graph is not None else 0,
+                     len(self.project.data.entities),
+                     len(getattr(self.project.data, "accepted_words", [])))
+        if rebuild or getattr(self, "_lex_signature", None) != signature:
+            self._lex = lex_module.build(self.project, graph)
+            self._lex_signature = signature
+        return self._lex
+
+    def _word_at_caret(self) -> Tuple[str, str]:
+        """
+        (what is being typed, where it starts) in the editor.
+
+        Worked out from the text of the line rather than Tk's "wordstart",
+        which does not agree with what a novelist means by a word - it stops
+        at apostrophes and does not reach back over "King Ro" to offer a name.
+        """
+        try:
+            line = self.editor.text.get("insert linestart", "insert")
+        except tk.TclError:
+            return "", ""
+        if not line or not line[-1].isalpha():
+            return "", ""
+        # Reach back over a capitalised run so "King Ro" completes as a name,
+        # falling back to the single word being typed.
+        match = re.search(r"(?:[A-Z][A-Za-z'\-]*\s+){1,3}[A-Za-z'\-]+$", line)
+        if not match:
+            match = re.search(r"[A-Za-z'\-]+$", line)
+        if not match:
+            return "", ""
+        prefix = match.group(0)
+        return prefix, self.editor.text.index(f"insert -{len(prefix)}c")
+
+    def cmd_complete(self, event=None):
+        """Suggest a continuation from this book's own vocabulary."""
+        if not self.project or not self.current_scene_id:
+            return "break"
+        prefix, start = self._word_at_caret()
+        lex = self.lexicon()
+        options = lex.complete(prefix) if prefix else []
+        if not options:
+            before = self.editor.text.get("insert linestart", "insert")
+            options = lex.next_words(before)
+            start = self.editor.text.index("insert")
+            prefix = ""
+        if not options:
+            self.status.say(
+                "Nothing to suggest yet - the book has not used a word like "
+                "that.", 5)
+            return "break"
+        self._show_completions(options, prefix, start)
+        return "break"
+
+    def _show_completions(self, options, prefix: str, start: str) -> None:
+        self._close_completions()
+        self.editor.text.update_idletasks()
+        try:
+            box = self.editor.text.bbox("insert")
+        except tk.TclError:
+            box = None
+        # bbox is None when the caret is not currently drawn. Falling back to
+        # the top-left of the editor is far better than silently doing
+        # nothing, which is what a writer would read as "the key is broken".
+        x, y, height = (box[0], box[1], box[3]) if box else (8, 8, 16)
+        popup = tk.Toplevel(self)
+        popup.wm_overrideredirect(True)
+        popup.attributes("-topmost", True)
+        listbox = tk.Listbox(popup, height=min(8, len(options)),
+                             activestyle="none", exportselection=False,
+                             width=max(14, max(len(o) for o in options) + 2))
+        listbox.grid(row=0, column=0)
+        for option in options:
+            listbox.insert("end", option)
+        listbox.selection_set(0)
+        popup.geometry(
+            f"+{self.editor.text.winfo_rootx() + x}"
+            f"+{self.editor.text.winfo_rooty() + y + height + 2}")
+        self._completion = (popup, listbox, prefix, start)
+
+        def accept(_event=None):
+            selection = listbox.curselection()
+            if selection:
+                self._apply_completion(options[selection[0]], prefix, start)
+            self._close_completions()
+            return "break"
+
+        def move(step):
+            def handler(_event=None):
+                current = listbox.curselection()
+                index = (current[0] if current else 0) + step
+                index = max(0, min(index, len(options) - 1))
+                listbox.selection_clear(0, "end")
+                listbox.selection_set(index)
+                listbox.see(index)
+                return "break"
+            return handler
+
+        for widget in (listbox, self.editor.text):
+            widget.bind("<Return>", accept, add="+")
+            widget.bind("<Tab>", accept, add="+")
+            widget.bind("<Down>", move(1), add="+")
+            widget.bind("<Up>", move(-1), add="+")
+            widget.bind("<Escape>", lambda _e: self._close_completions(),
+                        add="+")
+        listbox.bind("<Double-Button-1>", accept)
+        # Deliberately no FocusOut handler: showing the popup takes focus
+        # away from the editor, which would fire it immediately and close the
+        # popup in the same breath as opening it. Escape, accepting, or the
+        # next completion all close it.
+
+    def _apply_completion(self, chosen: str, prefix: str, start: str) -> None:
+        self.editor.text.edit_separator()
+        if prefix:
+            self.editor.text.delete(start, "insert")
+        elif not self.editor.text.get("insert -1c", "insert").isspace():
+            self.editor.text.insert("insert", " ")
+        self.editor.text.insert("insert", chosen)
+        self.editor.text.edit_separator()
+        self._editor_dirty = True
+
+    def _close_completions(self, _event=None) -> None:
+        state = getattr(self, "_completion", None)
+        if not state:
+            return
+        try:
+            state[0].destroy()
+        except tk.TclError:
+            pass
+        self._completion = None
+
+    def cmd_lexicon_report(self) -> None:
+        if not self.require_project():
+            return
+        from .. import lexicon as lex_module
+
+        body = lex_module.report(self.project, self.lexicon(rebuild=True))
+        dialogs.ReportWindow(self, "What the editor knows", body)
+
+    def cmd_check_names(self) -> None:
+        """Names in this scene that look like a known one typed wrong."""
+        if not self.require_project() or not self.current_scene_id:
+            messagebox.showinfo("Open a scene",
+                                "Select a scene to check.", parent=self)
+            return
+        lex = self.lexicon()
+        found = lex.suspicious(self.editor.get_value())
+        if not found:
+            self.status.say("Every name in this scene matches the book.", 6)
+            return
+        lines = ["NAMES THAT MAY BE TYPED WRONG", "=" * 56, "",
+                 "Each of these is capitalised, is not a name the book knows,",
+                 "and is close to one that is.", ""]
+        for phrase, close in found:
+            lines.append(f"  {phrase}")
+            lines.append(f"      did you mean:  {', '.join(close)}")
+            lines.append("")
+        dialogs.ReportWindow(self, "Check names in this scene",
+                             "\n".join(lines), width=640, height=520)
+
+    def on_editor_right_click(self, event) -> None:
+        """A right-click menu that knows the novel."""
+        if not self.project:
+            return
+        text = self.editor.text
+        try:
+            text.mark_set("insert", f"@{event.x},{event.y}")
+        except tk.TclError:
+            return
+        word = text.get("insert wordstart", "insert wordend").strip()
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="Cut",
+                         command=lambda: text.event_generate("<<Cut>>"))
+        menu.add_command(label="Copy",
+                         command=lambda: text.event_generate("<<Copy>>"))
+        menu.add_command(label="Paste",
+                         command=lambda: text.event_generate("<<Paste>>"))
+        menu.add_separator()
+        menu.add_command(label="Suggest a word here  (Ctrl+Space)",
+                         command=self.cmd_complete)
+
+        if word:
+            lex = self.lexicon()
+            term = lex.term(word)
+            close = lex.near_miss(word)
+            if close:
+                for suggestion in close:
+                    menu.add_command(
+                        label=f"Change to '{suggestion}'",
+                        command=lambda s=suggestion: self._replace_word(s))
+            if term and term.entity_id:
+                menu.add_separator()
+                menu.add_command(
+                    label=f"Open the sheet for '{term.text}'",
+                    command=lambda e=term.entity_id: self._open_entity(e))
+                menu.add_command(
+                    label=f"Where is '{term.text}' mentioned?",
+                    command=lambda e=term.entity_id: self._mentions_of(e))
+            menu.add_separator()
+            menu.add_command(label=f"Rename '{word}' everywhere...",
+                             command=lambda: self._rename_everywhere(word))
+            if not lex.knows(word):
+                menu.add_command(
+                    label=f"Add '{word}' to the dictionary",
+                    command=lambda: self.cmd_accept_word(word))
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def _replace_word(self, replacement: str) -> None:
+        text = self.editor.text
+        text.edit_separator()
+        text.delete("insert wordstart", "insert wordend")
+        text.insert("insert", replacement)
+        text.edit_separator()
+        self._editor_dirty = True
+
+    def _open_entity(self, entity_id: str) -> None:
+        self.save_editor(snapshot=False)
+        self.tree.selection_set(f"entity:{entity_id}")
+        self.tree.see(f"entity:{entity_id}")
+        self.render_selection()
+
+    def _mentions_of(self, entity_id: str) -> None:
+        self.selection_kind, self.selection_id = "entity", entity_id
+        self.cmd_mentions()
+
+    def _rename_everywhere(self, word: str) -> None:
+        self.save_editor(snapshot=False)
+        from .storyviews import ReplaceWindow
+
+        window = ReplaceWindow(self, self.project, self.refresh_tree)
+        window.find_entry.insert(0, word)
+        window.replace_entry.focus_set()
+
+    def cmd_accept_word(self, word: str = "") -> None:
+        """Teach the editor a word it has never seen."""
+        if not self.require_project():
+            return
+        if not word:
+            word = self.editor.text.get("insert wordstart",
+                                        "insert wordend").strip()
+        if not word:
+            return
+        accepted = self.project.data.accepted_words
+        if word.lower() in {w.lower() for w in accepted}:
+            self.status.say(f"'{word}' is already in the dictionary.", 4)
+            return
+        with self.project.action(f"accept the word '{word}'"):
+            accepted.append(word)
+            self.project.mark_dirty()
+        self.project.save()
+        self.lexicon(rebuild=True)
+        self._sync_history_menu()
+        self.status.say(f"'{word}' added. It will not be questioned again.", 6)
 
     def cmd_replace(self) -> None:
         """Find and replace across every document in the project."""
