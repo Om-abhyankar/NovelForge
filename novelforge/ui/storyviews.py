@@ -90,6 +90,302 @@ def build_graph_with_progress(parent, project):
         parent.update_idletasks()
 
 
+class ChapterMapWindow(tk.Toplevel):
+    """
+    The map as it stands at any chapter.
+
+    Drag the slider to chapter eighteen and the map shows where everyone is by
+    then, the route each of them took to get there, which places that chapter
+    names, and which places you drew but the story has still never touched.
+
+    Nothing is simulated. Every mark comes from the manuscript: a character is
+    at the location of the last scene they appeared in, and a place is
+    "mentioned" because its name is in the prose.
+    """
+
+    #: Kept deliberately few. A map with forty coloured overlays is a map you
+    #: cannot read.
+    HERE = "#2f7d4f"          # a character is here now
+    ROUTE = "#7a6a52"         # travelled through
+    MENTIONED = "#c08a3e"     # named in this chapter
+    UNTOUCHED = "#9a9a9a"     # pinned, never mentioned
+
+    def __init__(self, parent, project, graph) -> None:
+        super().__init__(parent)
+        self.project = project
+        self.graph = graph
+        self.title(f"Chapter Map - {project.data.title}")
+
+        from .. import mapstory
+
+        self.mapstory = mapstory
+        self.maps = mapstory.load_maps(project)
+        self.pins = mapstory.pin_index(project, self.maps)
+        self.states = mapstory.chapter_states(project, graph)
+        self.game_map = self.maps[0] if self.maps else None
+
+        container = ttk.Frame(self, padding=8)
+        container.grid(row=0, column=0, sticky="nsew")
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+        container.rowconfigure(1, weight=1)
+        container.columnconfigure(0, weight=1)
+
+        top = ttk.Frame(container)
+        top.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        top.columnconfigure(2, weight=1)
+        ttk.Label(top, text="Map").grid(row=0, column=0, padx=(0, 4))
+        self.map_choice = ttk.Combobox(
+            top, state="readonly", width=26,
+            values=[m.name for m in self.maps] or ["(no maps yet)"])
+        self.map_choice.grid(row=0, column=1, padx=(0, 12))
+        if self.maps:
+            self.map_choice.current(0)
+        self.map_choice.bind("<<ComboboxSelected>>",
+                             lambda _e: self._pick_map())
+
+        self.chapter_label = ttk.Label(top, text="", style="Section.TLabel")
+        self.chapter_label.grid(row=0, column=2, sticky="w")
+
+        panes = ttk.PanedWindow(container, orient="horizontal")
+        panes.grid(row=1, column=0, sticky="nsew")
+
+        left = ttk.Frame(panes)
+        left.rowconfigure(0, weight=1)
+        left.columnconfigure(0, weight=1)
+        self.canvas = tk.Canvas(left, background="#efe6d2",
+                                highlightthickness=0)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.canvas.bind("<Configure>", lambda _e: self.redraw())
+        panes.add(left, weight=4)
+
+        right = ttk.Frame(panes, padding=(8, 0, 0, 0))
+        right.rowconfigure(1, weight=1)
+        right.columnconfigure(0, weight=1)
+        ttk.Label(right, text="At this point in the book").grid(
+            row=0, column=0, sticky="w")
+        self.detail = ScrolledText(right, height=20, width=34, wrap="word",
+                                   font=("Consolas", 9))
+        self.detail.grid(row=1, column=0, sticky="nsew")
+        _monospace(self.detail)
+        self.detail.set_readonly(True)
+        panes.add(right, weight=2)
+
+        slider = ttk.Frame(container)
+        slider.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        slider.columnconfigure(1, weight=1)
+        ttk.Label(slider, text="Chapter").grid(row=0, column=0, padx=(0, 6))
+        self.chapter_var = tk.IntVar(value=max(0, len(self.states) - 1))
+        self.slider = ttk.Scale(
+            slider, from_=0, to=max(0, len(self.states) - 1),
+            orient="horizontal", command=lambda _v: self.redraw())
+        self.slider.grid(row=0, column=1, sticky="ew")
+        self.slider.set(max(0, len(self.states) - 1))
+
+        bar = ttk.Frame(container)
+        bar.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        for index, (text, colour) in enumerate([
+            ("here now", self.HERE), ("travelled", self.ROUTE),
+            ("named this chapter", self.MENTIONED),
+            ("never mentioned", self.UNTOUCHED),
+        ]):
+            dot = tk.Canvas(bar, width=12, height=12, highlightthickness=0)
+            dot.create_oval(2, 2, 11, 11, fill=colour, outline="")
+            dot.grid(row=0, column=index * 2, padx=(0 if index == 0 else 10, 3))
+            ttk.Label(bar, text=text, style="Hint.TLabel").grid(
+                row=0, column=index * 2 + 1)
+        bar.columnconfigure(8, weight=1)
+        ttk.Button(bar, text="Close", command=self.destroy).grid(
+            row=0, column=9, sticky="e")
+
+        center_window(self, 1080, 720, min_width=700, min_height=460)
+        self.bind("<Escape>", lambda _e: self.destroy())
+        # The report pane asks for a wide text box, which drags the sash left
+        # and leaves the map in a sliver. Put it back once the window has a
+        # real width to divide.
+        self.after(80, lambda: self._split(panes))
+        self.after(140, self.redraw)
+
+    def _split(self, panes: ttk.PanedWindow) -> None:
+        try:
+            panes.sashpos(0, int(self.winfo_width() * 0.62))
+        except tk.TclError:
+            pass
+
+    # -- drawing ---------------------------------------------------------
+    def _pick_map(self) -> None:
+        index = self.map_choice.current()
+        if 0 <= index < len(self.maps):
+            self.game_map = self.maps[index]
+            self.redraw()
+
+    def _transform(self) -> Tuple[float, float, float]:
+        """Scale and offset that fit the map inside the canvas."""
+        width = max(1, self.canvas.winfo_width())
+        height = max(1, self.canvas.winfo_height())
+        map_w = max(1, getattr(self.game_map, "width", 1600))
+        map_h = max(1, getattr(self.game_map, "height", 1100))
+        scale = min(width / map_w, height / map_h) * 0.94
+        return scale, (width - map_w * scale) / 2, (height - map_h * scale) / 2
+
+    def redraw(self) -> None:
+        self.canvas.delete("all")
+        if self.game_map is None:
+            self.canvas.create_text(
+                20, 20, anchor="nw", width=400, fill="#6b6152",
+                text="No maps yet.\n\nDraw one with the Map Maker (Ctrl+M) and "
+                     "link its pins to your locations. This view then shows "
+                     "where everyone is, chapter by chapter.")
+            return
+        if not self.states:
+            return
+
+        index = int(round(float(self.slider.get())))
+        index = max(0, min(index, len(self.states) - 1))
+        state = self.states[index]
+        self.chapter_label.configure(
+            text=f"{state.chapter_title}   "
+                 f"({index + 1} of {len(self.states)})")
+
+        scale, offset_x, offset_y = self._transform()
+
+        # The map itself, drawn from the same primitives the exporters use so
+        # it looks like the map the writer drew rather than an approximation.
+        try:
+            from .. import mapmaker as mm
+
+            # The primitive tuples differ by kind - polygons carry a fill and
+            # an outline colour where lines carry one colour and a width - so
+            # each is unpacked on its own terms rather than assumed.
+            for primitive in mm.build_primitives(self.game_map):
+                kind = primitive[0]
+                payload = primitive[1] if kind != "ellipse" else ()
+
+                def place(points):
+                    flat = []
+                    for x, y in points:
+                        flat += [offset_x + x * scale, offset_y + y * scale]
+                    return flat
+
+                if kind == "polygon" and len(payload) >= 3:
+                    fill, outline, width = primitive[2], primitive[3], primitive[4]
+                    self.canvas.create_polygon(
+                        place(payload), fill=fill or "",
+                        outline=outline or "", width=max(1, width * scale))
+                elif kind == "line" and len(payload) >= 2:
+                    colour, width = primitive[2], primitive[3]
+                    self.canvas.create_line(
+                        place(payload), fill=colour,
+                        width=max(1, width * scale))
+                elif kind == "ellipse" and len(primitive) >= 7:
+                    # (kind, x0, y0, x1, y1, fill, outline, width)
+                    x0, y0, x1, y1 = primitive[1:5]
+                    self.canvas.create_oval(
+                        offset_x + x0 * scale, offset_y + y0 * scale,
+                        offset_x + x1 * scale, offset_y + y1 * scale,
+                        fill=primitive[5] or "", outline="")
+                # Text from the map itself is skipped: this view draws its own
+                # labels, and two sets on top of each other is unreadable.
+        except Exception:
+            self.canvas.create_rectangle(
+                offset_x, offset_y,
+                offset_x + self.game_map.width * scale,
+                offset_y + self.game_map.height * scale,
+                outline="#b8a888")
+
+        # Who is where.
+        here_now: Dict[str, List[str]] = {}
+        for presence in state.characters.values():
+            if presence.here:
+                here_now.setdefault(presence.here, []).append(presence.name)
+        travelled = {loc for p in state.characters.values() for loc in p.route}
+
+        for entity_id, ref in self.pins.items():
+            pin = ref.pin
+            if getattr(ref, "map_id", "") != getattr(self.game_map, "id", ""):
+                continue
+            x = offset_x + pin.x * scale
+            y = offset_y + pin.y * scale
+            if entity_id in here_now:
+                colour, radius = self.HERE, 7
+            elif entity_id in state.mentioned_now:
+                colour, radius = self.MENTIONED, 6
+            elif entity_id in travelled:
+                colour, radius = self.ROUTE, 5
+            elif entity_id in state.mentioned_ever:
+                colour, radius = self.ROUTE, 4
+            else:
+                colour, radius = self.UNTOUCHED, 4
+            self.canvas.create_oval(x - radius, y - radius, x + radius,
+                                    y + radius, fill=colour, outline="#2b2b2b")
+            label = ref.label
+            if entity_id in here_now:
+                label += "  " + ", ".join(here_now[entity_id])
+            # Flip the label to the other side near the right edge, or a pin
+            # in the east of the map has its name run off the canvas.
+            if x > self.canvas.winfo_width() * 0.7:
+                self.canvas.create_text(x - radius - 4, y, anchor="e",
+                                        text=label, font=("Georgia", 9),
+                                        fill="#2b2b2b")
+            else:
+                self.canvas.create_text(x + radius + 4, y, anchor="w",
+                                        text=label, font=("Georgia", 9),
+                                        fill="#2b2b2b")
+
+        # Routes, drawn behind nothing but readable enough.
+        for presence in state.characters.values():
+            points: List[float] = []
+            for location_id in presence.route:
+                ref = self.pins.get(location_id)
+                if ref and getattr(ref, "map_id", "") == getattr(
+                        self.game_map, "id", ""):
+                    points += [offset_x + ref.pin.x * scale,
+                               offset_y + ref.pin.y * scale]
+            if len(points) >= 4:
+                self.canvas.create_line(points, fill=self.ROUTE, width=2,
+                                        dash=(5, 4), arrow="last",
+                                        smooth=True)
+
+        self._write_detail(state, here_now)
+
+    def _write_detail(self, state, here_now: Dict[str, List[str]]) -> None:
+        def name_of(entity_id: str) -> str:
+            node = self.graph.nodes.get(entity_id)
+            return node.name if node else "?"
+
+        lines = [state.chapter_title, "=" * 40, ""]
+        if state.characters:
+            lines.append("WHERE EVERYONE IS")
+            lines.append("")
+            for presence in sorted(state.characters.values(),
+                                   key=lambda p: p.name):
+                lines.append(f"  {presence.name}")
+                lines.append(f"      at {name_of(presence.here)}")
+                if len(presence.route) > 1:
+                    trail = " -> ".join(name_of(r) for r in presence.route[-4:])
+                    lines.append(f"      via {trail}")
+            lines.append("")
+        if state.mentioned_now:
+            lines += ["NAMED IN THIS CHAPTER", ""]
+            for location_id in state.mentioned_now:
+                lines.append(f"  {name_of(location_id)}")
+            lines.append("")
+        if state.untouched:
+            lines += ["ON THE MAP, NEVER MENTIONED", ""]
+            for location_id in state.untouched[:20]:
+                lines.append(f"  {name_of(location_id)}")
+            lines.append("")
+        if not state.characters and not state.mentioned_now:
+            lines += ["Nothing in this chapter names a place that is",
+                      "linked to a location, so there is nothing to show.",
+                      "",
+                      "Link locations to scenes, or pin them on the map,",
+                      "and this fills in."]
+        self.detail.set_readonly(False)
+        self.detail.set_value("\n".join(lines))
+        self.detail.set_readonly(True)
+
+
 def scrolled(parent, widget_factory, row: int = 0, column: int = 0):
     """
     Put a list or tree in a frame with a scrollbar and return it.

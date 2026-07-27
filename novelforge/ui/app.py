@@ -387,6 +387,8 @@ class App(tk.Tk):
                               command=self.cmd_timeline_window)
         plan_menu.add_command(label="Map Maker...", accelerator="Ctrl+M",
                               command=self.cmd_map_editor)
+        plan_menu.add_command(label="Chapter Map...", accelerator="Ctrl+Shift+M",
+                              command=self.cmd_chapter_map)
         plan_menu.add_command(label="Place Name Generator",
                               command=self.cmd_names)
         plan_menu.add_separator()
@@ -590,6 +592,7 @@ class App(tk.Tk):
             "<Control-l>": lambda _e: self.cmd_outline_window(),
             "<Control-t>": lambda _e: self.cmd_timeline_window(),
             "<Control-m>": lambda _e: self.cmd_map_editor(),
+            "<Control-Shift-M>": lambda _e: self.cmd_chapter_map(),
             "<Control-z>": self.cmd_undo,
             "<Control-y>": self.cmd_redo,
             "<Control-Shift-Z>": self.cmd_redo,
@@ -3188,6 +3191,16 @@ class App(tk.Tk):
         editor = MapEditor(self, self.project, on_change)
         if map_path is not None and Path(map_path).exists():
             editor._open_map(Path(map_path))
+
+    def cmd_chapter_map(self) -> None:
+        """The map as it stands at any chapter of the book."""
+        if not self.require_project():
+            return
+        self.commit_all()
+        from .storyviews import ChapterMapWindow, build_graph_with_progress
+
+        graph = build_graph_with_progress(self, self.project)
+        ChapterMapWindow(self, self.project, graph)
 
     def cmd_names(self) -> None:
         from .. import mapmaker

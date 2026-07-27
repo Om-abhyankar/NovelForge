@@ -236,8 +236,10 @@ def _signature(project) -> Tuple:
                tuple(e.character_ids), e.location_id) for e in data.events]
     beats = [(b.key, b.name, tuple(b.scene_ids)) for b in data.beats]
     chapters = [(c.id, c.title, c.order) for c in data.chapters]
+    from . import mapstory
+
     return (tuple(scenes), tuple(entities), tuple(notes), tuple(events),
-            tuple(beats), tuple(chapters))
+            tuple(beats), tuple(chapters), mapstory.map_signature(project))
 
 
 def invalidate(project=None) -> None:
@@ -341,6 +343,15 @@ def build(project, read_prose: bool = True, use_cache: bool = True,
     for note in data.notes:
         for target in getattr(note, "links", []) or []:
             graph.add_edge(note.id, target, "references")
+
+    # Maps join the graph as nodes, so the dependency map, the story bible and
+    # the question box all see them without knowing maps exist.
+    from . import mapstory
+
+    try:
+        mapstory.attach(project, graph)
+    except Exception:
+        pass        # a damaged map must not stop the graph being built
 
     # -- detected edges --------------------------------------------------
     graph.name_lookup = _build_name_lookup(data.entities)
@@ -705,6 +716,14 @@ def check_continuity(project, graph: StoryGraph) -> List[Issue]:
                     f"the reader feels ambushed.",
                     character.name,
                 ))
+
+    # 16. What only the map can tell us -----------------------------------
+    try:
+        from . import mapstory
+
+        issues.extend(mapstory.check_maps(project, graph))
+    except Exception:
+        pass
 
     issues.sort(key=lambda i: (i.rank, i.category, i.title))
     return issues
@@ -1509,7 +1528,8 @@ def verify_project(project, graph: Optional[StoryGraph] = None) -> Tuple[str, in
         try:
             from .mapmaker import load_map
 
-            game_map = load_map(pin_file)
+            if load_map(pin_file) is None:
+                raise ValueError("unreadable")
         except Exception:
             structural.append(Issue(
                 "medium", "Unreadable map",
@@ -1517,15 +1537,7 @@ def verify_project(project, graph: Optional[StoryGraph] = None) -> Tuple[str, in
                 "The file may be damaged. A backup copy may still be good.",
                 pin_file.stem,
             ))
-            continue
-        for pin in getattr(game_map, "pins", []):
-            if pin.entity_id and not data.entity(pin.entity_id):
-                structural.append(Issue(
-                    "medium", "Broken map link",
-                    f"A pin on '{game_map.name}' points at a deleted place",
-                    "Open the map and re-link or remove the pin.",
-                    game_map.name,
-                ))
+    # Broken pin links are reported by the map checks in check_continuity.
 
     everything = sorted(structural + issues, key=lambda i: (i.rank, i.category))
 
