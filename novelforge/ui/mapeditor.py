@@ -20,7 +20,7 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from .. import mapmaker as mm
+from .. import mapgen, mapmaker as mm
 from ..config import open_in_default_app, reveal_in_explorer, settings, theme
 from .dialogs import ChoiceDialog, Dialog, ReportWindow, TextPrompt
 from .widgets import Form, ScrollFrame, center_window
@@ -50,6 +50,13 @@ class MapEditor(tk.Toplevel):
         self.title("Map Maker")
 
         self.folder = project.folder("maps")
+        # Load the writer's own name lists, writing the starter file the first
+        # time, so anything they have edited is in force before the first name
+        # is generated.
+        try:
+            mm.load_name_styles(self.folder)
+        except Exception:
+            pass
         self.gm: Optional[mm.GameMap] = None
         self.map_file: Optional[Path] = None
         self.dirty = False
@@ -107,7 +114,8 @@ class MapEditor(tk.Toplevel):
         self.map_picker.bind("<<ComboboxSelected>>", self._on_pick_map)
 
         buttons = [
-            ("Generate", self.cmd_generate),
+            ("Surprise Me", self.cmd_surprise),
+            ("Generate...", self.cmd_generate),
             ("New", self.cmd_new_map),
             ("Save", self.cmd_save),
             ("Rename", self.cmd_rename),
@@ -122,6 +130,7 @@ class MapEditor(tk.Toplevel):
             ("|", None),
             ("Fit", self.cmd_zoom_fit),
             ("Names", self.cmd_name_generator),
+            ("Edit Names", self.cmd_edit_names),
             ("Help", self.cmd_help),
         ]
         column = 2
@@ -1226,6 +1235,56 @@ class MapEditor(tk.Toplevel):
             f"{counts.get('land', 0)} landmasses, "
             f"{counts.get('river', 0)} rivers, {len(generated.pins)} settlements. "
             f"Everything is editable - press Save to keep it."
+        )
+
+    def cmd_surprise(self) -> None:
+        """
+        A whole world, one press, no questions.
+
+        The Generate dialog exists for when the writer knows what they want.
+        This is for when they do not: every choice is made from the system's
+        entropy, so pressing it twice gives two different worlds. The seed is
+        recorded on the map, so one you like can be reproduced.
+        """
+        if not self._confirm_discard():
+            return
+        self.configure(cursor="watch")
+        self.update_idletasks()
+        try:
+            params = mapgen.random_params()
+            generated = mapgen.generate(params)
+        except Exception as exc:
+            self.configure(cursor="")
+            messagebox.showerror(
+                "Could not generate a world",
+                f"{type(exc).__name__}: {exc}\n\nPress it again - the next "
+                f"seed will be a different world.", parent=self)
+            return
+        self.configure(cursor="")
+
+        self.gm = generated
+        self.map_file = None
+        self.dirty = True
+        self._after_load()
+        counts: Dict[str, int] = {}
+        for shape in generated.shapes:
+            counts[shape.kind] = counts.get(shape.kind, 0) + 1
+        self._say(
+            f"'{generated.name}' - {counts.get('land', 0)} landmasses, "
+            f"{counts.get('river', 0)} rivers, {counts.get('mountains', 0)} "
+            f"ranges, {len(generated.pins)} settlements, named in the "
+            f"'{params.name_flavour}' style. Press Surprise Me again for a "
+            f"different world, or Save to keep this one."
+        )
+
+    def cmd_edit_names(self) -> None:
+        """Open the writer's own name lists for editing."""
+        path = mm.load_name_styles(self.folder)
+        if not open_in_default_app(path):
+            reveal_in_explorer(path.parent)
+        self._say(
+            f"Editing {path.name}. Add or replace styles, save the file, then "
+            f"press Surprise Me - the new names are picked up straight away."
         )
 
     def cmd_new_map(self) -> None:

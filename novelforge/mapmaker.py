@@ -1768,12 +1768,71 @@ NAME_SYLLABLES = {
 }
 
 
+#: The shipped lists, kept so the editable file can always be restored.
+DEFAULT_NAME_SYLLABLES = {
+    key: (list(start), list(end))
+    for key, (start, end) in NAME_SYLLABLES.items()
+}
+
+
+def name_styles_file(folder: Path | str) -> Path:
+    return Path(folder) / "Name Styles.json"
+
+
+def load_name_styles(folder: Path | str) -> Path:
+    """
+    Read the writer's own name lists, creating the starter file if absent.
+
+    The generator used to be five hardcoded lists, which is fine until your
+    world does not sound like any of them. This is a plain JSON file in the
+    Maps folder: add a style, delete one, replace every syllable with your own.
+    Anything malformed is ignored in favour of the shipped lists rather than
+    breaking name generation.
+    """
+    path = name_styles_file(folder)
+    if not path.exists():
+        try:
+            write_json_atomic(path, {
+                "_note": "Each style has a list of beginnings and a list of "
+                         "endings. A name is one of each, joined. Add your own "
+                         "styles, or replace these entirely.",
+                **{key: {"start": start, "end": end}
+                   for key, (start, end) in DEFAULT_NAME_SYLLABLES.items()},
+            })
+        except OSError:
+            return path
+
+    data = read_json(path, None)
+    if not isinstance(data, dict):
+        return path
+    merged: Dict[str, Tuple[List[str], List[str]]] = {}
+    for key, value in data.items():
+        if key.startswith("_") or not isinstance(value, dict):
+            continue
+        start = value.get("start")
+        end = value.get("end")
+        if isinstance(start, list) and isinstance(end, list) and start and end:
+            merged[str(key)] = ([str(s) for s in start if str(s).strip()],
+                                [str(e) for e in end if str(e).strip()])
+    if merged:
+        NAME_SYLLABLES.clear()
+        NAME_SYLLABLES.update(merged)
+    return path
+
+
+def name_styles() -> List[str]:
+    return sorted(NAME_SYLLABLES)
+
+
 def generate_name(flavour: str = "plain", seed: Optional[int] = None) -> str:
     """A place-name generator. Trivial, and saves a surprising amount of time."""
-    first, second = NAME_SYLLABLES.get(flavour, NAME_SYLLABLES["plain"])
+    if flavour not in NAME_SYLLABLES and NAME_SYLLABLES:
+        flavour = next(iter(NAME_SYLLABLES))
+    first, second = NAME_SYLLABLES.get(
+        flavour, next(iter(NAME_SYLLABLES.values())))
     rng = random.Random(seed)
     name = rng.choice(first) + rng.choice(second)
-    if flavour == "plain" and rng.random() < 0.25:
+    if flavour == "plain" and rng.random() < 0.25 and "plain" in NAME_SYLLABLES:
         name += " " + rng.choice(["Keep", "Cross", "End", "Mill", "Watch"])
     return name
 

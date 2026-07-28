@@ -853,6 +853,26 @@ def _add_settlements(gm: GameMap, params: MapParams, mask, height,
                         used_names.add(candidate)
                         label = candidate
                         break
+                else:
+                    # Every attempt collided, which happens as soon as the
+                    # writer's own name lists are small - three beginnings and
+                    # three endings is nine possible names for forty
+                    # settlements. Leaving the label empty gave a map full of
+                    # nameless towns, so distinguish it instead the way real
+                    # places do.
+                    base = generate_name(params.name_flavour)
+                    for prefix in ("Upper ", "Lower ", "Little ", "Great ",
+                                   "New ", "Old ", "East ", "West ", "North ",
+                                   "South "):
+                        if prefix + base not in used_names:
+                            label = prefix + base
+                            break
+                    else:
+                        number = 2
+                        while f"{base} {number}" in used_names:
+                            number += 1
+                        label = f"{base} {number}"
+                    used_names.add(label)
             gm.pins.append(Pin(
                 x=px, y=py, kind=kind, label=label, size=size,
                 label_side=rng.choice(("e", "w", "n", "s")),
@@ -959,6 +979,47 @@ PRESETS: Dict[str, Dict] = {
         roughness=0.8, mountains=0.2, rivers=2, climate="tropical",
         forest=0.55, capitals=1, cities=2, towns=5, villages=8, ruins=6),
 }
+
+
+def random_params(name: str = "") -> MapParams:
+    """
+    A whole world, decided for you.
+
+    No seed to think of, no preset to pick, no sliders. Everything is drawn
+    from the system's own entropy, so pressing the button twice gives two
+    different worlds - which is what "random" is supposed to mean, and was not
+    true while the seed defaulted to a fixed number and every choice had to be
+    made in a dialog first.
+
+    The seed is still recorded on the finished map, so a world you like can be
+    reproduced exactly.
+    """
+    from .mapmaker import name_styles
+
+    rng = random.Random()          # seeded from the OS, not from a number
+    params = preset(rng.choice(list(PRESETS)), rng.getrandbits(31))
+
+    styles = name_styles() or ["plain"]
+    params.name_flavour = rng.choice(styles)
+    params.name_places = True
+
+    # Size and population vary too, so successive worlds do not all feel like
+    # the same map with the coastline moved.
+    params.width = rng.choice([1400, 1600, 1800, 2000, 2200])
+    params.height = int(params.width * rng.uniform(0.62, 0.78))
+    params.cities = rng.randint(3, 9)
+    params.towns = rng.randint(6, 18)
+
+    if name:
+        params.name = name
+    else:
+        first = generate_name(params.name_flavour).title()
+        params.name = rng.choice([
+            f"The {first} Reach", f"The {first} Lands", f"{first}",
+            f"The Kingdoms of {first}", f"{first} and Beyond",
+            f"The {first} Coast",
+        ])
+    return params
 
 
 def preset(name: str, seed: int = 1) -> MapParams:
