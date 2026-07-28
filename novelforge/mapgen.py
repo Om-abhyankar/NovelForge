@@ -34,7 +34,15 @@ import random
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
-from .mapmaker import GameMap, Layer, MapLabel, Pin, Shape, generate_name
+from .mapmaker import (
+    GameMap,
+    Layer,
+    MapLabel,
+    Pin,
+    Shape,
+    generate_name,
+    name_for,
+)
 
 Point = Tuple[float, float]
 Grid = List[List[float]]
@@ -848,7 +856,7 @@ def _add_settlements(gm: GameMap, params: MapParams, mask, height,
             label = ""
             if params.name_places:
                 for _ in range(12):
-                    candidate = generate_name(params.name_flavour)
+                    candidate = name_for("settlement", params.name_flavour)
                     if candidate not in used_names:
                         used_names.add(candidate)
                         label = candidate
@@ -860,7 +868,7 @@ def _add_settlements(gm: GameMap, params: MapParams, mask, height,
                     # settlements. Leaving the label empty gave a map full of
                     # nameless towns, so distinguish it instead the way real
                     # places do.
-                    base = generate_name(params.name_flavour)
+                    base = name_for("settlement", params.name_flavour)
                     for prefix in ("Upper ", "Lower ", "Little ", "Great ",
                                    "New ", "Old ", "East ", "West ", "North ",
                                    "South "):
@@ -929,7 +937,7 @@ def _add_labels(gm: GameMap, params: MapParams,
         cx = sum(c[0] for c in cells) / len(cells)
         cy = sum(c[1] for c in cells) / len(cells)
         px, py = to_map((int(cx), int(cy)))
-        name = generate_name(params.name_flavour).upper()
+        name = name_for("region", params.name_flavour).upper()
         gm.labels.append(MapLabel(
             x=px, y=py, text=name + rng.choice(suffixes),
             size=max(14, int(gm.height * 0.020)),
@@ -938,7 +946,7 @@ def _add_labels(gm: GameMap, params: MapParams,
 
     gm.labels.append(MapLabel(
         x=gm.width * 0.5, y=gm.height * 0.93,
-        text=f"THE {generate_name(params.name_flavour).upper()} OCEAN",
+        text=f"THE {name_for('water', params.name_flavour).upper()} OCEAN",
         size=max(14, int(gm.height * 0.020)),
         italic=True, tracking=6.0, layer="Places",
     ))
@@ -994,7 +1002,7 @@ def random_params(name: str = "") -> MapParams:
     The seed is still recorded on the finished map, so a world you like can be
     reproduced exactly.
     """
-    from .mapmaker import name_styles
+    from .mapmaker import NAME_ROLES, name_styles
 
     rng = random.Random()          # seeded from the OS, not from a number
     params = preset(rng.choice(list(PRESETS)), rng.getrandbits(31))
@@ -1002,6 +1010,17 @@ def random_params(name: str = "") -> MapParams:
     styles = name_styles() or ["plain"]
     params.name_flavour = rng.choice(styles)
     params.name_places = True
+
+    # Give each kind of thing its own style. A world where the kingdoms, the
+    # towns and the sea all sound alike reads as one culture; a world where
+    # they differ reads as history.
+    if len(styles) > 1:
+        for role in list(NAME_ROLES):
+            NAME_ROLES[role] = rng.choice(styles)
+        # Regions and the realms on them share a tongue: they are the same
+        # people, named at different scales.
+        NAME_ROLES["region"] = NAME_ROLES["realm"]
+        NAME_ROLES["river"] = NAME_ROLES["water"]
 
     # Size and population vary too, so successive worlds do not all feel like
     # the same map with the coastline moved.

@@ -1775,8 +1775,43 @@ DEFAULT_NAME_SYLLABLES = {
 }
 
 
+#: Which style names which kind of thing. A kingdom rarely sounds like a
+#: village, and a river almost never sounds like either - so each gets its own
+#: entry rather than everything sharing one list.
+NAME_ROLES: Dict[str, str] = {
+    "settlement": "plain",
+    "realm": "northern",
+    "region": "northern",
+    "water": "elvish",
+    "river": "elvish",
+}
+
+DEFAULT_NAME_ROLES = dict(NAME_ROLES)
+
+ROLE_LABELS = {
+    "settlement": "Towns, cities and keeps",
+    "realm": "Kingdoms and realms",
+    "region": "Regions and provinces",
+    "water": "Seas and oceans",
+    "river": "Rivers and lakes",
+}
+
+
 def name_styles_file(folder: Path | str) -> Path:
     return Path(folder) / "Name Styles.json"
+
+
+def name_for(role: str, fallback: str = "") -> str:
+    """
+    A name for one kind of thing, in whatever style that kind uses.
+
+    `fallback` is the map's own style, used when the role has no entry - so a
+    writer who never touches the roles still gets a consistent world.
+    """
+    style = NAME_ROLES.get(role) or fallback
+    if style not in NAME_SYLLABLES:
+        style = fallback if fallback in NAME_SYLLABLES else ""
+    return generate_name(style or next(iter(NAME_SYLLABLES), "plain"))
 
 
 def load_name_styles(folder: Path | str) -> Path:
@@ -1796,6 +1831,11 @@ def load_name_styles(folder: Path | str) -> Path:
                 "_note": "Each style has a list of beginnings and a list of "
                          "endings. A name is one of each, joined. Add your own "
                          "styles, or replace these entirely.",
+                "_roles_note": "Which style names which kind of thing. Change "
+                               "a value to any style name below - or to the "
+                               "same one everywhere, if your world sounds "
+                               "consistent.",
+                "_roles": dict(DEFAULT_NAME_ROLES),
                 **{key: {"start": start, "end": end}
                    for key, (start, end) in DEFAULT_NAME_SYLLABLES.items()},
             })
@@ -1817,6 +1857,20 @@ def load_name_styles(folder: Path | str) -> Path:
     if merged:
         NAME_SYLLABLES.clear()
         NAME_SYLLABLES.update(merged)
+
+    roles = data.get("_roles")
+    NAME_ROLES.clear()
+    NAME_ROLES.update(DEFAULT_NAME_ROLES)
+    if isinstance(roles, dict):
+        for role, style in roles.items():
+            if isinstance(style, str) and str(role) in DEFAULT_NAME_ROLES:
+                NAME_ROLES[str(role)] = style
+    # A role pointing at a style the writer deleted would silently fall back
+    # to the map's own style; better to point it somewhere real.
+    available = sorted(NAME_SYLLABLES)
+    for role, style in list(NAME_ROLES.items()):
+        if style not in NAME_SYLLABLES:
+            NAME_ROLES[role] = available[0] if available else "plain"
     return path
 
 
