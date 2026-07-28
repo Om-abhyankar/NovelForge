@@ -18,7 +18,7 @@ from __future__ import annotations
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .. import storygraph
 from ..config import THEMES, open_in_default_app, settings
