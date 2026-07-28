@@ -165,8 +165,12 @@ class NewProjectDialog(Dialog):
 
         combo.bind("<<ComboboxSelected>>", on_structure)
 
-        field("Target word count", "target_words", "90000", 14)
-        field("Daily word target", "daily_words", "1000", 14)
+        # Prefilled from Preferences. These two settings existed and were
+        # editable but nothing ever read them, so changing them did nothing.
+        field("Target word count", "target_words",
+              str(settings["default_target_words"]), 14)
+        field("Daily word target", "daily_words",
+              str(settings["default_daily_target"]), 14)
         field("Deadline (YYYY-MM-DD, optional)", "deadline", "", 18)
 
         ttk.Separator(body, orient="horizontal").grid(
@@ -277,8 +281,10 @@ class NewProjectDialog(Dialog):
             "series": self.vars["series"].get().strip(),
             "genre": self.vars["genre"].get().strip(),
             "structure": structures.key_for_name(self.vars["structure"].get()),
-            "target_words": as_int("target_words", 90000),
-            "daily_words": as_int("daily_words", 1000),
+            "target_words": as_int("target_words",
+                                   settings["default_target_words"]),
+            "daily_words": as_int("daily_words",
+                                  settings["default_daily_target"]),
             "deadline": deadline,
             "packs": packs,
             "parent": Path(self.vars["parent"].get().strip() or projects_root()),
@@ -407,6 +413,12 @@ class PreferencesDialog(Dialog):
         heading("Checking as you write")
         add("Underline mistakes as I type", "live_writing_check")
 
+        heading("New novels")
+        add("Default target word count", "default_target_words",
+            [50000, 60000, 70000, 80000, 90000, 100000, 120000, 150000])
+        add("Default words per day", "default_daily_target",
+            [250, 500, 750, 1000, 1500, 2000, 3000])
+
         heading("Sprints")
         add("Sprint minutes", "sprint_minutes", [5, 10, 15, 20, 25, 30, 45, 60])
 
@@ -431,10 +443,17 @@ class PreferencesDialog(Dialog):
             [10, 20, 40, 80, 200])
 
     def collect(self) -> bool:
+        from ..config import DEFAULT_SETTINGS
+
         updates: Dict[str, Any] = {}
         for key, var in self.vars.items():
             raw = var.get()
-            default = settings[key]
+            # The TYPE comes from the shipped default, not from whatever is
+            # currently stored. Reading it from the stored value meant a
+            # settings file corrupted into holding a string where a number
+            # belongs would be written straight back out as a string, and the
+            # corruption would survive every visit to this dialog.
+            default = DEFAULT_SETTINGS.get(key, settings[key])
             if isinstance(default, bool):
                 updates[key] = bool(raw)
             elif isinstance(default, int):
@@ -444,9 +463,14 @@ class PreferencesDialog(Dialog):
                     continue
             elif isinstance(default, float):
                 try:
-                    updates[key] = float(str(raw))
+                    value = float(str(raw))
                 except ValueError:
                     continue
+                # A non-finite number would reach every consumer of this
+                # setting and crash the first one that does arithmetic on it.
+                if value != value or value in (float("inf"), float("-inf")):
+                    continue
+                updates[key] = value
             else:
                 updates[key] = str(raw)
         settings.update(updates)

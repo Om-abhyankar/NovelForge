@@ -546,6 +546,11 @@ class Project:
                 moved = unique_path(destination / source.name)
                 try:
                     shutil.move(str(source), str(moved))
+                    # Recorded so undo puts the file back where the restored
+                    # manifest expects it. Without this, undoing a move left
+                    # the manifest pointing at the old folder and the document
+                    # sitting in the new one - a scene that opens empty.
+                    self._file_moves.append((str(source), str(moved)))
                     scene.docx = self.rel(moved)
                     scene.docx_mtime = docxio.docx_mtime(moved)
                 except (OSError, shutil.Error):

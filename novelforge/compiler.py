@@ -69,7 +69,10 @@ class CompileOptions:
     chapter_headings: bool = True
     chapter_numbering: str = "word"      # word | digit | none
     include_chapter_titles: bool = True
-    scene_separator: str = "#"
+    # Empty so the writer's preference wins. A truthy default here meant the
+    # Scene separator setting in Preferences could never take effect: line 93
+    # only falls back to it when this is falsy.
+    scene_separator: str = ""
     include_synopses: bool = False       # working-draft mode
     include_status_notes: bool = False
     running_header: bool = True

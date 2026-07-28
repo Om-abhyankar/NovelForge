@@ -97,14 +97,17 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     # -- editor ----------------------------------------------------------
     "editor_font": "Georgia",
     "editor_font_size": 13,
-    "editor_wrap_width": 78,
+    # editor_wrap_width and composition_block_pause_seconds used to live here
+    # and nothing ever read either of them. Removed rather than left as knobs
+    # that do nothing. An old settings file that still contains them keeps
+    # them harmlessly - Settings.load preserves unknown keys so a downgrade
+    # loses nothing.
     "theme": "warm",  # light | dark | warm
     "focus_mode": False,
     "typewriter_scroll": False,
     "autosave_seconds": 30,
     # -- sprints ---------------------------------------------------------
     "sprint_minutes": 25,
-    "composition_block_pause_seconds": 5,
     # -- targets ---------------------------------------------------------
     "default_target_words": 90000,
     "default_daily_target": 1000,

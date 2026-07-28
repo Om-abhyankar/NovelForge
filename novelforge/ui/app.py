@@ -28,6 +28,7 @@ from .. import (
     backup,
     compiler,
     diagnostics,
+    docxio,
     recovery,
     stats,
     structures,
@@ -573,6 +574,17 @@ class App(tk.Tk):
                                         font=("Consolas", 10))
         self.detail_text.set_readonly(True)
 
+        # _apply_theme styles this pane, but it runs from _build_styles, which
+        # happens before this widget exists - so at startup the dashboard and
+        # every report pane kept Tk's default white until the writer happened
+        # to change theme. Style it now, on the way in.
+        _detail_palette = theme()
+        self.detail_text.text.configure(
+            background=_detail_palette["bg"], foreground=_detail_palette["fg"],
+            insertbackground=_detail_palette["caret"],
+            selectbackground=_detail_palette["select"],
+        )
+
         self.editor.grid(row=1, column=0, sticky="nsew")
         add_editing_keys(self.editor.text)
         self.editor.text.bind("<Button-3>", self.on_editor_right_click)
@@ -1043,6 +1055,32 @@ class App(tk.Tk):
         self.current_scene_id = scene.id
         self._show_editor()
         text = self.project.scene_text(scene.id)
+
+        # A document that exists but cannot be read comes back as "". Loading
+        # that into the editor and letting autosave run replaced the file with
+        # an empty one thirty seconds later - the tool destroying prose it had
+        # merely failed to parse. Refuse to edit it instead.
+        path = self.project.abs(scene.docx) if scene.docx else None
+        if (path is not None and path.exists() and not text.strip()
+                and not docxio.prose_readable(path)):
+            self.editor.set_value("")
+            self.editor.set_readonly(True)
+            self._editor_dirty = False
+            self._unreadable_scene = scene.id
+            messagebox.showwarning(
+                "This scene could not be read",
+                f"'{scene.title}' is on disk but could not be opened.\n\n"
+                f"It may be open in Word, or damaged. Editing here is "
+                f"disabled so nothing overwrites it. Try File > Versions to "
+                f"recover an earlier copy.",
+                parent=self,
+            )
+            self.centre_title.configure(text=f"{scene.title}  (unreadable)")
+            self._build_scene_inspector(scene)
+            return
+        if getattr(self, "_unreadable_scene", "") == scene.id:
+            self._unreadable_scene = ""
+        self.editor.set_readonly(False)
         self._suppress_modified = True
         self.editor.set_value(text)
         self._suppress_modified = False
@@ -1740,6 +1778,12 @@ class App(tk.Tk):
 
     def save_editor(self, snapshot: bool = True) -> bool:
         if not (self.project and self.current_scene_id and self._editor_dirty):
+            return False
+        # Never write over a document we could not read. The editor is locked
+        # for these, but the guard belongs here too: this is the function that
+        # actually touches the file, and autosave reaches it on a timer.
+        if getattr(self, "_unreadable_scene", "") == self.current_scene_id:
+            self._editor_dirty = False
             return False
         scene = self.project.data.scene(self.current_scene_id)
         if not scene:
@@ -3037,6 +3081,12 @@ class App(tk.Tk):
             return None
         if not self.project:
             return None
+        # Flush the editor first. Undo replaces the manifest, and the scene may
+        # be re-rendered from disk immediately afterwards - so anything typed
+        # since the last autosave was simply dropped, up to thirty seconds of
+        # writing, with no way to get it back.
+        self.commit_all()
+        self.save_editor(snapshot=False)
         label = self.project.undo()
         if label is None:
             self.status.say("Nothing left to undo.", 4)
@@ -3049,6 +3099,8 @@ class App(tk.Tk):
             return None
         if not self.project:
             return None
+        self.commit_all()
+        self.save_editor(snapshot=False)
         label = self.project.redo()
         if label is None:
             self.status.say("Nothing to redo.", 4)
@@ -3996,12 +4048,18 @@ Python {".".join(str(v) for v in __import__("sys").version_info[:3])}
                 except Exception:
                     pass
 
-        # Record where we were, then mark the exit clean. The journal survives
-        # so the next start can restore the scene and caret; only the offer of
-        # unsaved text is suppressed, because there is none.
+        # Record where we were. Mark the exit clean ONLY if there is genuinely
+        # nothing unsaved: marking it clean is what suppresses the offer to
+        # recover, so doing it after a save that failed threw away the only
+        # remaining copy of the writer's last paragraph.
         try:
             self._write_journal()
-            recovery.mark_clean_exit()
+            if not self._editor_dirty:
+                recovery.mark_clean_exit()
+            else:
+                self.status.say("Some text could not be saved. It is kept in "
+                                "the recovery journal and will be offered "
+                                "back next time.", 0)
         except Exception:
             pass
 

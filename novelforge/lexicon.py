@@ -235,6 +235,11 @@ class Lexicon:
             key = phrase.lower()
             if key in seen:
                 continue
+            # Remembered whether or not it matched. Only recording matches
+            # meant every unmatched phrase - the great majority - paid for a
+            # full Levenshtein scan against every name again on each of its
+            # occurrences, which was over half the cost of the live check.
+            seen.add(key)
             if self.knows(phrase):
                 continue
             head = phrase.split()[0].lower()
@@ -242,7 +247,6 @@ class Lexicon:
                 continue
             close = self.near_miss(phrase)
             if close:
-                seen.add(key)
                 out.append((phrase, close))
             if len(out) >= limit:
                 break

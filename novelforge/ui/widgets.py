@@ -655,6 +655,19 @@ class WritingCheck:
         if not body.strip():
             self.clear()
             return
+        # On a very long scene the rules cost a few hundred milliseconds, and
+        # that is a few hundred milliseconds of dead keyboard every time the
+        # writer pauses. Past this size, check only the stretch around the
+        # caret - which is the only part being looked at anyway - and offset
+        # the results so the marks still land in the right place.
+        offset = 0
+        if len(body) > 24_000:
+            try:
+                here = len(self.text.get("1.0", "insert"))
+            except tk.TclError:
+                here = 0
+            offset = max(0, here - 12_000)
+            body = body[offset:offset + 24_000]
         lex = None
         if self.get_lexicon is not None:
             try:
@@ -667,6 +680,10 @@ class WritingCheck:
             self.hits = []
             return
 
+        if offset:
+            for hit in self.hits:
+                hit.start += offset
+                hit.end += offset
         for tag in ("nf_hard", "nf_soft"):
             self.text.tag_remove(tag, "1.0", "end")
         for hit in self.hits:
