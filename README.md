@@ -8,7 +8,7 @@ database you hope to export from someday.**
 [![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-3776AB.svg)](#requirements)
 [![No account, no cloud, no telemetry](https://img.shields.io/badge/cloud-none-success.svg)](#where-your-work-lives)
 [![Support this project](https://img.shields.io/badge/support-donate-ff69b4.svg)](#support-novelforge)
-[![Try it in your browser](https://img.shields.io/badge/try_it-in_your_browser-6e3a22.svg)](https://om-abhyankar.github.io/NovelForge/)
+[![Website](https://img.shields.io/badge/website-om--abhyankar.github.io%2FNovelForge-6e3a22.svg)](https://om-abhyankar.github.io/NovelForge/)
 
 Every single thing NovelForge creates — every scene, every character sheet,
 every map — is a real Microsoft Word document sitting in a folder on your own
@@ -29,7 +29,7 @@ one tool that opens in about a second and never asks you to sign in.
 ## Contents
 
 - [The first five minutes](#the-first-five-minutes)
-- [NovelForge Web — try it without installing anything](#novelforge-web--try-it-without-installing-anything)
+- [The website](#the-website)
 - [Where your work lives](#where-your-work-lives)
 - [Features at a glance](#features-at-a-glance)
 - [Writing](#writing)
@@ -114,31 +114,14 @@ That is the whole loop. Everything below is detail you can read when you need it
 
 ---
 
-## NovelForge Web — try it without installing anything
+## The website
 
 **[om-abhyankar.github.io/NovelForge](https://om-abhyankar.github.io/NovelForge/)**
-— a free, lightweight version that runs entirely in your browser. No install,
-no Windows requirement, no account.
-
-It's deliberately a smaller thing than the desktop app: chapters, scenes,
-the writing editor, and word counts — not the maps, outline frameworks,
-diagnostics, or continuity checker. There's no server behind it either, so
-there's nothing to trust with your writing: everything is kept in *your*
-browser's own storage as you type, and nothing is ever sent anywhere.
-
-Because there's no server, there's also no cloud sync between devices —
-that's what **Export** and **Import** are for. Export bundles your whole
-project into one `.zip`: a real `.docx` file per scene plus a manifest of
-your chapters and their order, so the file itself is a legitimate backup,
-readable even without NovelForge. Save that file wherever you like — a USB
-stick, an email to yourself, a folder in your own cloud storage — and
-**Import** it on any device, in any browser, to pick up exactly where you
-left off.
-
-This is a genuinely separate build from the desktop app (browsers can't
-touch your filesystem or run Tkinter), living in `web-online/` in this
-repo — see `CLAUDE.md` if you're curious how the export format works or
-want to extend it.
+— screenshots, the full feature list, install steps and a download link, if
+you'd rather look before you clone. It's a plain landing page, not the app
+itself: NovelForge can't run in a browser (Tkinter doesn't work there, and
+it needs your real filesystem), so there is no online version to try
+without installing anything. Source lives in `site/` in this repo.
 
 ---
 
