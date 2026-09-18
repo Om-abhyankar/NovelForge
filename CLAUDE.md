@@ -20,19 +20,32 @@ decide what it means. "It's glitchy" or "it doesn't feel right" is a complete
 and valid bug report — the job is to find the actual mechanism yourself, not
 to ask them to narrow it down technically.
 
-## Two codebases live here — only one is real
+## Three codebases live here — don't confuse them
 
-- **`novelforge/`** — Python 3.13 + Tkinter. **This is the whole product.**
-  Launched by `Write.bat` → `python -m novelforge`. Creating a novel, writing,
-  the map maker, the corkboard, the outline, the timeline, every settings
-  dialog, compiling, backups — all of it lives here and all of it works.
+- **`novelforge/`** — Python 3.13 + Tkinter. **This is the whole desktop
+  product.** Launched by `Write.bat` → `python -m novelforge`. Creating a
+  novel, writing, the map maker, the corkboard, the outline, the timeline,
+  every settings dialog, compiling, backups — all of it lives here and all
+  of it works.
 - **`web/`** — Next.js 15 + React 19, static-exported so end users only ever
-  need Python. This is an **unfinished redesign**, reachable only via
-  `python -m novelforge --web`. Its shell, settings screen and editor are
+  need Python. This is an **unfinished redesign of the desktop UI**,
+  reachable only via `python -m novelforge --web`, and it talks to a local
+  Python HTTP server (`novelforge/server.py`) for every piece of data - it
+  cannot run without that server. Its shell, settings screen and editor are
   wired to the engine; the maps, dashboard, library, character and world
   screens **do not exist yet**. Do not treat anything in `web/` as the
   current app, and do not assume a feature exists there just because it
   exists in `novelforge/ui/`.
+- **`web-online/`** — a plain HTML/CSS/vanilla-JS site, no build step, no
+  framework, one vendored dependency (`vendor/jszip.min.js`). This is a
+  **third, genuinely different thing**: a deliberately small, standalone
+  web app, hosted for free on GitHub Pages at
+  `https://om-abhyankar.github.io/NovelForge/`, that runs with **no server
+  at all** - not even the local one `web/` depends on. See the dedicated
+  section below before touching it; don't assume anything about `web/`
+  applies here, and don't assume anything about `web-online/` applies to
+  `web/`. They solve different problems (an offline desktop-UI redesign vs.
+  a public, account-free in-browser writing tool) and share no code.
 
 If a future session's goal is to finish migrating `novelforge/ui/` to
 `web/`, that's a real, large, deliberate project — confirm with the user
@@ -310,6 +323,74 @@ except `/api/health`. Within that model:
   unfinished web UI - just don't assume this is safe if `server.py` is ever
   exposed beyond loopback.
 
+## `web-online/` — the public browser app (added 2026-09)
+
+The user asked to "make it live online" and mentioned GitHub Copilot as the
+tool that would do it. Worth recording so a future session doesn't repeat
+the confusion: Copilot is an AI pair-programmer, not a host - it doesn't
+put anything on the internet. **GitHub Pages** is what actually does that,
+for free, straight from this repo, and that's what's wired up.
+
+The harder constraint is real, though: a browser can't run Tkinter and
+can't touch the filesystem the way `novelforge/` does, so "put the app
+online" could never mean "the same app, in a browser." `web-online/` is a
+deliberately smaller, separate build - chapters, scenes, the editor, word
+counts, Export/Import - not the map maker, outline frameworks, story graph,
+or diagnostics. Porting any of those would mean re-implementing genuinely
+Python-only logic (Pillow-based map rendering, the heuristic prose checks)
+in JavaScript; treat that as a separate, scoped project per feature, not
+something to bolt on casually.
+
+**Architecture**: no backend, on purpose - not even the local one `web/`
+depends on.
+- State lives in the browser's IndexedDB (`app.js`'s `dbLoad`/`dbSave`),
+  one JSON blob, one project at a time. There's no multi-project switcher
+  in-browser by design; Export exists partly to be that.
+- **Export** produces a `.zip` (via the vendored `vendor/jszip.min.js`) with
+  a `project.json` manifest (chapters/scenes/order - metadata only, same
+  split as the desktop app) plus one real `.docx` per scene. The `.docx`
+  files are hand-written minimal OOXML (`buildDocx` in `app.js`) rather than
+  pulling in a docx-writing library - deliberately, so the same code that
+  writes them can read them back exactly (`readDocxText`), which is what
+  makes Import reliable. Don't "simplify" this by swapping in a library on
+  only one side of the round trip.
+- **Import** reverses that: unzip, read `project.json` for structure, read
+  each scene's `.docx`'s `word/document.xml` directly (it's just a zip
+  inside a zip) with the browser's native `DOMParser` - no parsing library
+  needed either.
+- No build step. Plain HTML/CSS/JS, served as-is. This was a deliberate
+  choice over reusing `web/`'s Next.js/React scaffold: `web/`'s components
+  are built assuming `web/lib/api.ts`'s network calls to a local server,
+  which doesn't exist here, and standing up a second Next.js app with a
+  different `basePath` (GitHub Pages serves this from `/NovelForge/`, not
+  `/`) was more moving parts than a self-contained static site needs. If a
+  future session wants the two web UIs sharing components, that's a real
+  refactor - don't assume it's a small change.
+
+**How this was actually tested** (worth repeating the method, not just the
+result, since there's no CI for this yet): the hand-written OOXML round
+trip was tested directly in Node (`web-online/test_docx.js` -
+`npm install && npm test` in that folder - needs `@xmldom/xmldom` as a
+DOMParser stand-in, since Node has no native one), and the full app was
+driven in a real, visible Edge browser via Selenium (serving the folder
+with `python -m http.server`, since IndexedDB behaves differently, or is
+disabled, on a bare `file://` URL) through the actual user flow: new
+project → add chapter → add scene → type → reload the page → export →
+import → assert the text matches exactly. That pass caught a real bug
+worth knowing about if you touch the CSS: several elements
+(`.modal-backdrop` among them) set their own `display` unconditionally,
+which overrides the browser's default `[hidden] { display: none }` rule -
+so toggling the `hidden` attribute/property from JS silently did nothing,
+and an invisible modal kept intercepting clicks. Fixed with one rule,
+`[hidden] { display: none !important; }`, in `style.css` - keep that rule
+if you touch the CSS, or the same bug comes back on the next element that
+sets its own `display`.
+
+**Known limitations, not yet fixed**: no mobile layout for the binder
+sidebar (hidden below 720px width, no replacement nav); IndexedDB has
+practical size limits that a very long novel could approach (no warning
+shown yet); only one project at a time lives in browser storage.
+
 ## Running it
 
 ```
@@ -329,3 +410,15 @@ npm run build     # static export into web/out/, committed to the repo -
                    # this is what lets end users skip Node entirely
 npm run test      # typecheck + lint + format check
 ```
+
+`web-online/` (the public browser app - no build step, but IndexedDB needs
+a real origin, not `file://`, so serve it rather than opening the file):
+```
+cd web-online
+python -m http.server 8000     # then open localhost:8000 in a browser
+npm install && npm test         # the one committed regression test (docx round-trip)
+```
+Deploys automatically on every push to `main` that touches `web-online/**`
+(`.github/workflows/deploy-pages.yml`) to
+https://om-abhyankar.github.io/NovelForge/ - no manual deploy step, and
+nothing to run locally to publish a change.
