@@ -297,6 +297,13 @@ class GameMap:
     created: str = field(default_factory=now_iso)
     modified: str = field(default_factory=now_iso)
 
+    # Not part of the map: a memo of the last label-placement pass, so panning
+    # and zooming (which change nothing about where pins and labels sit) do
+    # not re-run that collision search on every single redraw. Never
+    # serialised - see to_json below.
+    _label_cache: Optional[Tuple[tuple, Dict[str, Tuple[str, bool]]]] = field(
+        default=None, init=False, repr=False, compare=False)
+
     def __post_init__(self) -> None:
         if not self.id:
             self.id = new_id("map")
@@ -739,6 +746,44 @@ def boxes_overlap(a: Box, b: Box, pad: float = 1.5) -> bool:
                 or a[3] + pad < b[1] or b[3] + pad < a[1])
 
 
+def _label_fingerprint(gm: GameMap, visible: set) -> tuple:
+    """
+    Everything `layout_pin_labels` actually reads, rounded to a tenth of a
+    map unit. Panning and zooming touch none of this, so a redraw triggered
+    by either can reuse the previous placement instead of repeating an
+    O(pins x placed) collision search - the part of a redraw that gets slow
+    on a busy generated world.
+    """
+    return (
+        gm.title_on_map, gm.name, gm.compass, gm.width, gm.height,
+        gm.scale_text, gm.hide_colliding_labels, frozenset(visible),
+        tuple(
+            (l.layer, round(l.x, 1), round(l.y, 1), l.text, l.size, l.tracking)
+            for l in gm.labels
+        ),
+        tuple(
+            (s.layer, s.label, round(s.centroid()[0], 1), round(s.centroid()[1], 1))
+            for s in gm.shapes if s.label.strip()
+        ),
+        tuple(
+            (p.id, p.layer, round(p.x, 1), round(p.y, 1), p.size, p.label,
+             p.label_side, p.kind)
+            for p in gm.pins
+        ),
+    )
+
+
+def _cached_label_placement(gm: GameMap, visible: set
+                            ) -> Dict[str, Tuple[str, bool]]:
+    fingerprint = _label_fingerprint(gm, visible)
+    cached = gm._label_cache
+    if cached is not None and cached[0] == fingerprint:
+        return cached[1]
+    placement = layout_pin_labels(gm, visible)
+    gm._label_cache = (fingerprint, placement)
+    return placement
+
+
 def layout_pin_labels(gm: GameMap, visible: Optional[set] = None
                       ) -> Dict[str, Tuple[str, bool]]:
     """
@@ -1172,7 +1217,7 @@ def build_primitives(gm: GameMap, include_furniture: bool = True
                         True, False, 2.0))
 
     accent = "#8a2f22" if gm.style in ("parchment", "treasure") else ink
-    placement = layout_pin_labels(gm, visible) if gm.auto_place_labels else {}
+    placement = _cached_label_placement(gm, visible) if gm.auto_place_labels else {}
     label_size = max(9, int(gm.height * 0.0155))
     for pin in gm.pins:
         if pin.layer not in visible:

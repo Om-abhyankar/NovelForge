@@ -139,7 +139,16 @@ class MapEditor(tk.Toplevel):
                 ttk.Separator(bar, orient="vertical").grid(
                     row=0, column=column, sticky="ns", padx=6)
             else:
-                ttk.Button(bar, text=label, command=command, width=8).grid(
+                # A flat 8 was too narrow for "Surprise Me" and "Edit Names"
+                # (11 and 10 characters), which clipped them to "Surprise !"
+                # and "Edit Nam". Widening every button to fit the longest
+                # label overshot the other way: with 15 buttons in one row,
+                # that pushed the whole toolbar past the window's edge and
+                # hid "Help" and the coordinate readout entirely. Sizing
+                # each button to its own label keeps the row the same width
+                # it always was everywhere except the two that needed it.
+                ttk.Button(bar, text=label, command=command,
+                          width=max(8, len(label) + 1)).grid(
                     row=0, column=column, padx=2)
             column += 1
 
@@ -329,6 +338,23 @@ class MapEditor(tk.Toplevel):
     def _event_point(self, event) -> Point:
         return self.to_map(self.canvas.canvasx(event.x),
                            self.canvas.canvasy(event.y))
+
+    def _pan_by(self, dx: int, dy: int) -> None:
+        """
+        Slide the view by a screen-pixel offset without rebuilding the canvas.
+
+        Panning changes nothing about the map, only what part of it is under
+        the window, so every existing canvas item is still correct - it just
+        needs to move. `canvas.move` repositions items in place, which is
+        far cheaper than the delete-everything-and-redraw a full `redraw()`
+        does, and a pan drag fires one motion event per pixel. Doing a full
+        redraw per event is what made panning a busy map feel glitchy.
+        """
+        if dx == 0 and dy == 0:
+            return
+        self.offset_x += dx
+        self.offset_y += dy
+        self.canvas.move("all", dx, dy)
 
     # ==================================================================
     # Drawing
@@ -603,12 +629,8 @@ class MapEditor(tk.Toplevel):
             return
         tool = self.tool.get()
         if tool == "pan" and self._pan_from:
-            dx = event.x - self._pan_from[0]
-            dy = event.y - self._pan_from[1]
-            self.offset_x += dx
-            self.offset_y += dy
+            self._pan_by(event.x - self._pan_from[0], event.y - self._pan_from[1])
             self._pan_from = (event.x, event.y)
-            self.redraw()
             return
         if tool == "freehand":
             point = self._event_point(event)
@@ -637,7 +659,12 @@ class MapEditor(tk.Toplevel):
                 return
             self._move_selection(dx, dy)
             self._drag_from = point
-            self.redraw()
+            # Debounced, not immediate: a drag fires far more motion events
+            # than a screen can paint, and each one rebuilds the whole
+            # primitive list plus the label-collision pass. Coalescing to
+            # one redraw per frame is what keeps dragging a pin smooth on a
+            # map with a lot of names on it.
+            self._schedule_redraw()
 
     def _on_release(self, event) -> None:
         tool = self.tool.get()
@@ -702,10 +729,8 @@ class MapEditor(tk.Toplevel):
     def _on_middle_drag(self, event) -> None:
         if not (self._panning and self._pan_from):
             return
-        self.offset_x += event.x - self._pan_from[0]
-        self.offset_y += event.y - self._pan_from[1]
+        self._pan_by(event.x - self._pan_from[0], event.y - self._pan_from[1])
         self._pan_from = (event.x, event.y)
-        self.redraw()
 
     def _on_middle_up(self, _event=None) -> None:
         self._panning = False
@@ -736,7 +761,10 @@ class MapEditor(tk.Toplevel):
         # Keep the point under the cursor fixed while zooming.
         self.offset_x = anchor_x - (anchor_x - self.offset_x) * (self.zoom / old)
         self.offset_y = anchor_y - (anchor_y - self.offset_y) * (self.zoom / old)
-        self.redraw()
+        # A trackpad or a fast wheel can fire many of these a second; coalesce
+        # them the same way drags are, instead of rebuilding the map once per
+        # tick.
+        self._schedule_redraw()
 
     def cmd_zoom_fit(self) -> None:
         if not self.gm:
