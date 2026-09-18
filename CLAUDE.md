@@ -341,9 +341,26 @@ except `/api/health`. Within that model:
 A landing page for the desktop app, not a version of the app itself -
 screenshots, the feature list, install steps, a download link to the
 latest GitHub Release, and the sponsor links also in the README. Plain
-HTML/CSS, no JavaScript logic, no build step. Hosted for free on GitHub
-Pages, deployed automatically by `.github/workflows/deploy-pages.yml` on
-any push to `main` that touches `site/**`.
+HTML/CSS, no build step, one small JS file (`app.js`) doing exactly one
+thing: an IntersectionObserver that adds `.is-visible` to `[data-reveal]`
+elements as they scroll into view, skipped entirely under
+`prefers-reduced-motion`. Hosted for free on GitHub Pages, deployed
+automatically by `.github/workflows/deploy-pages.yml` on any push to
+`main` that touches `site/**`.
+
+**Redesigned 2026-09** after the first version was fairly reasonably
+called "basic" - the user pointed at obsidian.md, literatureandlatte.com/
+scrivener and atticus.io as the bar. Two Google Fonts (Fraunces for display
+type, Inter for body - `<link>`ed, not self-hosted, with system-font
+fallbacks so nothing breaks if the CDN is unreachable), a `.window-chrome`
+wrapper (macOS-style traffic-light dots + title bar) around every
+screenshot so a plain Tkinter capture reads as a polished product shot, a
+subtle animated gradient glow behind the hero (`@keyframes drift`, disabled
+under reduced-motion), and a head-to-head comparison table against
+Scrivener/Atticus/Obsidian - the same pattern Atticus's own site uses
+against Vellum. Kept the warm/parchment identity rather than drifting into
+a generic purple-SaaS look; premium and on-brand aren't the same thing as
+matching a competitor's palette.
 
 **Screenshots** (`site/assets/screenshots/`) were taken against a disposable
 demo project (`Kessa Ren` / "The Ashfall Crown"), seeded via

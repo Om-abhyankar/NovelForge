@@ -14,6 +14,9 @@
 <meta name="twitter:card" content="summary_large_image">
 
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📖</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script type="application/ld+json">
 {
@@ -34,53 +37,79 @@
 </head>
 <body>
 
+<div class="grain"></div>
+
 <nav class="nav">
   <div class="wrap">
-    <span class="nav-brand">NovelForge</span>
+    <span class="nav-brand">Novel<em>Forge</em></span>
     <div class="nav-links">
       <a href="#features">Features</a>
+      <a href="#compare">Compare</a>
       <a href="#screens">Look inside</a>
       <a href="#install">Install</a>
       <a href="#support">Support</a>
-      <a href="https://github.com/Om-abhyankar/NovelForge">GitHub</a>
+      <a class="nav-gh" href="https://github.com/Om-abhyankar/NovelForge">GitHub</a>
     </div>
   </div>
 </nav>
 
-<header class="hero wrap">
-  <div class="hero-badges">
-    <span class="pill">Free &amp; open source</span>
-    <span class="pill">MIT licensed</span>
-    <span class="pill">No account</span>
-    <span class="pill">No cloud</span>
-    <span class="pill">No subscription</span>
-  </div>
-  <h1>Write your novel.<br>Not a <span>database entry.</span></h1>
-  <p class="lede">
-    NovelForge is a free novel-writing studio for Windows. Every single
-    thing it creates — every scene, every character sheet, every map — is
-    a real Microsoft Word document, sitting in a folder on your own disk.
-  </p>
-  <div class="btn-row">
-    <a class="btn btn-primary" href="https://github.com/Om-abhyankar/NovelForge/releases/latest">⬇ Download for Windows</a>
-    <a class="btn" href="https://github.com/Om-abhyankar/NovelForge">View source on GitHub</a>
-  </div>
-  <p class="fine">Free forever. No account, no telemetry, no internet connection required.</p>
+<header class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="wrap hero-inner">
+    <div class="hero-badges" data-reveal>
+      <span class="pill">Free &amp; open source</span>
+      <span class="pill">MIT licensed</span>
+      <span class="pill">No account, ever</span>
+      <span class="pill">100% offline</span>
+    </div>
+    <h1 data-reveal data-reveal-delay="1">Write your novel.<br>Not a <span class="hl">database entry.</span></h1>
+    <p class="lede" data-reveal data-reveal-delay="2">
+      Real Microsoft Word documents, sitting in a folder on your own disk —
+      not a subscription, not a server, not a synced account somewhere else.
+      Nine outline frameworks, a continuity checker that reads your actual
+      prose, and a fantasy map maker that builds a whole world in one click.
+    </p>
+    <div class="btn-row" data-reveal data-reveal-delay="3">
+      <a class="btn btn-primary" href="https://github.com/Om-abhyankar/NovelForge/releases/latest">
+        <span class="btn-icon">⬇</span> Download for Windows
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/Om-abhyankar/NovelForge">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+        View source
+      </a>
+    </div>
+    <p class="fine" data-reveal data-reveal-delay="4">No telemetry. No internet connection required. Works on a laptop with the Wi-Fi off.</p>
 
-  <div class="hero-shot">
-    <img src="assets/screenshots/main-editor.png" alt="NovelForge's main writing window: a binder of chapters and scenes on the left, the scene editor in the middle, and a scene inspector with goal/conflict/disaster fields on the right.">
+    <div class="hero-shot" data-reveal data-reveal-delay="5">
+      <div class="window-chrome">
+        <div class="chrome-bar">
+          <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+          <span class="chrome-title">The Ashfall Crown — NovelForge</span>
+        </div>
+        <img src="assets/screenshots/main-editor.png" alt="NovelForge's main writing window: a binder of chapters and scenes on the left, the scene editor in the middle, and a scene inspector with goal/conflict/disaster fields on the right.">
+      </div>
+    </div>
   </div>
 </header>
 
+<section class="stats-bar">
+  <div class="wrap stats-grid">
+    <div class="stat" data-reveal><strong>9</strong><span>outline frameworks</span></div>
+    <div class="stat" data-reveal data-reveal-delay="1"><strong>0</strong><span>subscriptions, ever</span></div>
+    <div class="stat" data-reveal data-reveal-delay="2"><strong>20</strong><span>map pin types</span></div>
+    <div class="stat" data-reveal data-reveal-delay="3"><strong>100%</strong><span>of your data, on your disk</span></div>
+  </div>
+</section>
+
 <section id="features">
   <div class="wrap">
-    <div class="section-head">
+    <div class="section-head" data-reveal>
       <span class="kicker">Everything in one tool</span>
       <h2>What it actually does</h2>
       <p>Most novelists piece this together from five different apps. NovelForge bundles it into one that opens in about a second.</p>
     </div>
     <div class="features">
-      <div class="feature-card">
+      <div class="feature-card" data-reveal>
         <span class="emoji">✍️</span>
         <h3>While you write</h3>
         <ul>
@@ -89,7 +118,7 @@
           <li>Live spelling/grammar tuned to your manuscript's own names and invented words</li>
         </ul>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-reveal data-reveal-delay="1">
         <span class="emoji">🗺️</span>
         <h3>Planning &amp; structure</h3>
         <ul>
@@ -98,7 +127,7 @@
           <li>Real Word reference sheets for characters, locations, items, factions, threads</li>
         </ul>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-reveal data-reveal-delay="2">
         <span class="emoji">🕸️</span>
         <h3>World &amp; story intelligence</h3>
         <ul>
@@ -107,7 +136,7 @@
           <li>One-click Story Bible generation, always current</li>
         </ul>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-reveal>
         <span class="emoji">🏰</span>
         <h3>Maps &amp; worldbuilding</h3>
         <ul>
@@ -116,7 +145,7 @@
           <li>Hand-drawn tools: freehand coastlines, 20 pin types, 4 art styles</li>
         </ul>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-reveal data-reveal-delay="1">
         <span class="emoji">🛡️</span>
         <h3>Never losing your work</h3>
         <ul>
@@ -125,7 +154,7 @@
           <li>Full undo/redo for structural edits — delete a chapter, get it back</li>
         </ul>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-reveal data-reveal-delay="2">
         <span class="emoji">🔍</span>
         <h3>Offline diagnostics</h3>
         <ul>
@@ -140,13 +169,18 @@
 
 <section id="screens" class="alt-bg">
   <div class="wrap">
-    <div class="section-head">
+    <div class="section-head" data-reveal>
       <span class="kicker">Look inside</span>
       <h2>A tool built for exploring, not just typing</h2>
     </div>
 
-    <div class="showcase">
-      <div class="showcase-shot"><img src="assets/screenshots/map-maker.png" alt="The map maker showing a procedurally generated fantasy world with coastlines, mountain ranges, forests, rivers, and named settlements, in a parchment art style with a compass rose and scale bar."></div>
+    <div class="showcase" data-reveal>
+      <div class="showcase-shot">
+        <div class="window-chrome">
+          <div class="chrome-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="chrome-title">Map Maker — Gnashrok and Beyond</span></div>
+          <img src="assets/screenshots/map-maker.png" alt="The map maker showing a procedurally generated fantasy world with coastlines, mountain ranges, forests, rivers, and named settlements, in a parchment art style with a compass rose and scale bar.">
+        </div>
+      </div>
       <div class="showcase-text">
         <span class="kicker">Maps</span>
         <h3>A whole fantasy world, one click</h3>
@@ -159,8 +193,13 @@
       </div>
     </div>
 
-    <div class="showcase">
-      <div class="showcase-shot"><img src="assets/screenshots/corkboard.png" alt="The corkboard view: scenes shown as index cards, grouped by chapter, colour-coded by status, with synopses visible on each card."></div>
+    <div class="showcase" data-reveal>
+      <div class="showcase-shot">
+        <div class="window-chrome">
+          <div class="chrome-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="chrome-title">Corkboard</span></div>
+          <img src="assets/screenshots/corkboard.png" alt="The corkboard view: scenes shown as index cards, grouped by chapter, colour-coded by status, with synopses visible on each card.">
+        </div>
+      </div>
       <div class="showcase-text">
         <span class="kicker">Corkboard</span>
         <h3>See the shape of the whole book</h3>
@@ -171,8 +210,13 @@
       </div>
     </div>
 
-    <div class="showcase">
-      <div class="showcase-shot"><img src="assets/screenshots/outline.png" alt="The outline window showing the Three-Act Structure framework, with each beat's target position in the manuscript shown as a percentage and a word count."></div>
+    <div class="showcase" data-reveal>
+      <div class="showcase-shot">
+        <div class="window-chrome">
+          <div class="chrome-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="chrome-title">Outline &amp; Beats — Three-Act Structure</span></div>
+          <img src="assets/screenshots/outline.png" alt="The outline window showing the Three-Act Structure framework, with each beat's target position in the manuscript shown as a percentage and a word count.">
+        </div>
+      </div>
       <div class="showcase-text">
         <span class="kicker">Planning</span>
         <h3>Nine frameworks, switch freely</h3>
@@ -186,26 +230,114 @@
   </div>
 </section>
 
-<section id="install">
+<section id="compare">
   <div class="wrap">
-    <div class="section-head">
+    <div class="section-head" data-reveal>
+      <span class="kicker">How it stacks up</span>
+      <h2>Where NovelForge actually fits</h2>
+      <p>Scrivener and Atticus are excellent, mature tools — this isn't a
+        claim to beat them at everything. Here's the honest comparison.</p>
+    </div>
+    <div class="compare-table-wrap" data-reveal>
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th class="us">NovelForge</th>
+            <th>Scrivener</th>
+            <th>Atticus</th>
+            <th>Obsidian</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Price</td>
+            <td class="us">Free</td>
+            <td>$59.99</td>
+            <td>$147</td>
+            <td>Free</td>
+          </tr>
+          <tr>
+            <td>Account required</td>
+            <td class="us">Never</td>
+            <td>No</td>
+            <td>Yes, to activate</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Storage format</td>
+            <td class="us">Real .docx files</td>
+            <td>Proprietary project file</td>
+            <td>Cloud-synced project</td>
+            <td>Plain Markdown</td>
+          </tr>
+          <tr>
+            <td>Built-in outline frameworks</td>
+            <td class="us">9</td>
+            <td>0 (blank templates)</td>
+            <td>0</td>
+            <td>0 — general note-taking</td>
+          </tr>
+          <tr>
+            <td>Continuity / story-graph checker</td>
+            <td class="us">✓ mines your prose</td>
+            <td>✗</td>
+            <td>✗</td>
+            <td>✗ — not fiction-specific</td>
+          </tr>
+          <tr>
+            <td>Procedural fantasy map maker</td>
+            <td class="us">✓ one click</td>
+            <td>✗</td>
+            <td>✗</td>
+            <td>✗</td>
+          </tr>
+          <tr>
+            <td>Offline prose diagnostics</td>
+            <td class="us">✓ ~20 checks</td>
+            <td>✗</td>
+            <td>✗</td>
+            <td>✗</td>
+          </tr>
+          <tr>
+            <td>Open source</td>
+            <td class="us">✓ MIT</td>
+            <td>✗</td>
+            <td>✗</td>
+            <td>✗</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="compat-note" data-reveal>
+      If you already own Scrivener or Atticus and love it, keep using it —
+      this is for the writer who wants the same category of tool without
+      paying for it or trusting a cloud account with an unfinished
+      manuscript.
+    </p>
+  </div>
+</section>
+
+<section id="install" class="alt-bg">
+  <div class="wrap">
+    <div class="section-head" data-reveal>
       <span class="kicker">Getting started</span>
       <h2>Three steps, no technical background needed</h2>
     </div>
     <div class="install-steps">
-      <div class="step">
+      <div class="step" data-reveal>
         <span class="num">1</span>
         <h4>Install Python</h4>
         <p>Free, from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>
           — tick "Add python.exe to PATH" during setup. One-time, a couple of minutes.</p>
       </div>
-      <div class="step">
+      <div class="step" data-reveal data-reveal-delay="1">
         <span class="num">2</span>
         <h4>Download NovelForge</h4>
         <p>Grab the latest release from GitHub and unzip it anywhere on
           your PC — your Desktop or Documents folder is fine.</p>
       </div>
-      <div class="step">
+      <div class="step" data-reveal data-reveal-delay="2">
         <span class="num">3</span>
         <h4>Double-click Write.bat</h4>
         <p>That's it. It finds Python on its own and opens straight into
@@ -213,7 +345,7 @@
       </div>
     </div>
 
-    <div class="compat-row">
+    <div class="compat-row" data-reveal>
       <div class="compat-item">
         <span class="emoji">🪟</span>
         Windows 10 &amp; 11
@@ -227,28 +359,30 @@
         Linux — not yet
       </div>
     </div>
-    <p class="compat-note">
+    <p class="compat-note" data-reveal>
       NovelForge's engine is plain Python, but its interface is built with
       Tkinter and has only ever been tested on Windows. macOS/Linux support
       is a real possibility, not a promise — <a href="https://github.com/Om-abhyankar/NovelForge/issues">open an issue</a>
       if that's what would get you using it.
     </p>
 
-    <div class="btn-row" style="justify-content:center; margin-top:36px;">
-      <a class="btn btn-primary" href="https://github.com/Om-abhyankar/NovelForge/releases/latest">⬇ Download the latest release</a>
+    <div class="btn-row btn-row-center" data-reveal>
+      <a class="btn btn-primary" href="https://github.com/Om-abhyankar/NovelForge/releases/latest">
+        <span class="btn-icon">⬇</span> Download the latest release
+      </a>
     </div>
   </div>
 </section>
 
-<section id="support" class="alt-bg">
+<section id="support">
   <div class="wrap">
-    <div class="section-head">
+    <div class="section-head" data-reveal>
       <span class="kicker">Support</span>
       <h2>Free, and always will be</h2>
       <p>No subscription, no paywalled features. If NovelForge is useful to
         you, a donation is welcome but never expected.</p>
     </div>
-    <div class="support-grid">
+    <div class="support-grid" data-reveal>
       <div class="support-card">
         <img src="assets/donate/paypal-qr.png" alt="QR code for paypal.me/OmAbhyankar">
         <h4>PayPal</h4>
@@ -275,5 +409,6 @@
   </div>
 </footer>
 
+<script src="app.js"></script>
 </body>
 </html>
