@@ -991,6 +991,7 @@ class Project:
             line_spacing=settings["manuscript_line_spacing"],
             margin=settings["manuscript_margin"],
             first_line_indent=settings["manuscript_first_line_indent"],
+            synopsis=scene.synopsis,
         )
         scene.drafts = list(dict.fromkeys(list(scene.drafts) + [name]))
         scene.active_draft = name
@@ -1062,6 +1063,7 @@ class Project:
                 line_spacing=settings["manuscript_line_spacing"],
                 margin=settings["manuscript_margin"],
                 first_line_indent=settings["manuscript_first_line_indent"],
+                synopsis=scene.synopsis,
             )
         scene.active_draft = name
         scene.word_count = docxio.docx_word_count(self.abs(scene.docx))

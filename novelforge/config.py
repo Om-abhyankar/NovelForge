@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 from typing import Any, Dict
 
@@ -252,7 +253,13 @@ def reveal_in_explorer(path: Path) -> None:
         if path.is_dir():
             os.startfile(str(path))  # noqa: S606 - intentional shell open
         else:
-            os.system(f'explorer /select,"{path}"')  # noqa: S605
+            # A list of args, not a shell string: Windows filenames can
+            # legally contain characters (&, |, ^, ...) that cmd.exe treats
+            # as metacharacters, so building this as a string for os.system
+            # let an oddly-named file or a typed backup label change what
+            # actually runs. subprocess with a list bypasses the shell
+            # entirely, so the path is passed through literally either way.
+            subprocess.Popen(["explorer", f"/select,{path}"])
     except OSError:
         pass
 

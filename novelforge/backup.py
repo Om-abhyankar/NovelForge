@@ -290,10 +290,16 @@ def restore_backup(archive: Path, destination: Path) -> Tuple[bool, str]:
     try:
         destination.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(archive) as zf:
-            # Guard against path traversal in a hand-edited archive.
+            # Guard against path traversal in a hand-edited archive. A plain
+            # string prefix check (`startswith`) is not enough here - a
+            # sibling folder like "MyBook 2" starts with the same characters
+            # as "MyBook" and would wrongly pass. Checking that the resolved
+            # path is actually the destination or one of its descendants is
+            # what the comment above always claimed this did.
+            dest_root = destination.resolve()
             for name in zf.namelist():
                 resolved = (destination / name).resolve()
-                if not str(resolved).startswith(str(destination.resolve())):
+                if resolved != dest_root and dest_root not in resolved.parents:
                     return False, f"Unsafe path in archive: {name}"
             zf.extractall(destination)
         return True, f"Restored to {destination}"

@@ -149,17 +149,38 @@ def _library(_body: Dict[str, Any]) -> Any:
     return {"projects": out, "root": str(projects_root())}
 
 
+def _save_outgoing_project() -> None:
+    """
+    Save whatever project is currently open, before switching away from it.
+
+    A scene's synopsis, its goal/conflict/disaster fields, idea-inbox
+    entries, links - anything that lives in project.json rather than a
+    .docx - has no second copy anywhere. Swallowing a save failure here and
+    switching anyway (the previous behaviour) meant a locked manifest file
+    (OneDrive mid-sync, a permissions error) silently dropped whatever of
+    that metadata had not been saved yet, with no error and no sign anything
+    was wrong. Raising instead means the switch itself fails and the outgoing
+    project is left exactly as it was, unsaved, until the problem is fixed.
+    """
+    if STATE.project is None:
+        return
+    try:
+        STATE.project.save()
+    except Exception as exc:
+        raise ApiError(
+            f"Could not save '{STATE.project.data.title}' before switching "
+            f"projects: {exc}. Nothing has been changed - fix the problem "
+            f"and try again.", 409,
+        ) from exc
+
+
 @route("POST", "/api/project/open")
 def _open(body: Dict[str, Any]) -> Any:
     path = str(body.get("path") or "").strip()
     if not path:
         raise ApiError("A folder path is required.")
     with STATE.lock:
-        if STATE.project is not None:
-            try:
-                STATE.project.save()
-            except Exception:
-                pass
+        _save_outgoing_project()
         try:
             STATE.project = Project.open(Path(path))
         except (ProjectError, OSError) as exc:
@@ -175,6 +196,7 @@ def _create(body: Dict[str, Any]) -> Any:
     if not title:
         raise ApiError("A title is required.")
     with STATE.lock:
+        _save_outgoing_project()
         try:
             project = Project.create(
                 title=title,

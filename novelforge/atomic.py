@@ -46,9 +46,19 @@ def _swap(tmp: Path, target: Path) -> None:
     # The temp file holds the complete new content. Deleting it would throw
     # away the only copy on disk, so it is kept and named in the error - a
     # writer can rename it by hand and lose nothing.
+    #
+    # PermissionError (a locked file, the common case) gets the friendly
+    # explanation and instruction below. Anything else - a full disk, a path
+    # that got too long, a removed drive - would get that same "close Word"
+    # advice even though it would not help, so those get the real OS message
+    # instead of a guess.
+    if isinstance(last, PermissionError):
+        reason = ("it is open in another program (usually Word, sometimes "
+                  "OneDrive). Close it and try again.")
+    else:
+        reason = f"{last}"
     raise FileBusyError(
-        f"Could not replace {target.name}: it is open in another program "
-        f"(usually Word, sometimes OneDrive). Close it and try again.\n\n"
+        f"Could not replace {target.name}: {reason}\n\n"
         f"Your new version is safe in '{tmp.name}' in the same folder."
     ) from last
 
