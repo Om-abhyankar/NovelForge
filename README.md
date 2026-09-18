@@ -51,6 +51,7 @@ one tool that opens in about a second and never asks you to sign in.
 - [Requirements](#requirements)
 - [Credits](#credits)
 - [Support NovelForge](#support-novelforge)
+- [Contributing](#contributing)
 
 ---
 
@@ -802,3 +803,14 @@ to help keep it going, a donation is welcome but never expected.
 
 Scan the UPI code with any UPI app (Google Pay, PhonePe, Paytm, BHIM, your
 bank's app...), or enter the ID by hand. Either way — thank you.
+
+---
+
+## Contributing
+
+Bug reports and feature ideas are welcome — [open an issue](../../issues/new/choose).
+If you want to submit code, see `CONTRIBUTING.md` for the two rules that
+matter and how to test a change by hand (there's no automated test suite
+yet). `CLAUDE.md` has the module map if you want to understand the codebase
+first — this whole project was built through AI pairing, so that file is
+the closest thing it has to onboarding docs.
