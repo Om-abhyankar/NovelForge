@@ -303,6 +303,15 @@ class App(WritingIntelligence, tk.Tk):
         self.edit_menu.add_command(label="Redo", accelerator="Ctrl+Y",
                                    command=self.cmd_redo)
         self.edit_menu.add_separator()
+        # Find and Replace used to live in Tools, which is where every other
+        # app on the writer's machine puts everything BUT find/replace - Word,
+        # a browser, an IDE all put it in Edit. Moving it here is one less
+        # thing to hunt for.
+        self.edit_menu.add_command(label="Find in Project...",
+                                   accelerator="Ctrl+F", command=self.cmd_search)
+        self.edit_menu.add_command(label="Find and Replace...",
+                                   accelerator="Ctrl+H", command=self.cmd_replace)
+        self.edit_menu.add_separator()
         self.edit_menu.add_command(label="Open the Trash Folder",
                                    command=self.cmd_open_trash)
         menubar.add_cascade(label="Edit", menu=self.edit_menu)
@@ -325,6 +334,11 @@ class App(WritingIntelligence, tk.Tk):
                             command=self.cmd_write_outline)
         ms_menu.add_command(label="Write Reverse Outline",
                             command=self.cmd_reverse_outline)
+        # Same kind of action as the two above - turn what's already in the
+        # project into a reference document - so it lives with them rather
+        # than in Plan, which is now everything that's read on screen.
+        ms_menu.add_command(label="Write Story Bible",
+                            command=self.cmd_story_bible)
         ms_menu.add_command(label="Sweep [Fix Later] Tags",
                             command=self.cmd_fix_later)
         ms_menu.add_separator()
@@ -333,11 +347,6 @@ class App(WritingIntelligence, tk.Tk):
         menubar.add_cascade(label="Manuscript", menu=ms_menu)
 
         tools_menu = tk.Menu(menubar, tearoff=0)
-        tools_menu.add_command(label="Find in Project...", accelerator="Ctrl+F",
-                               command=self.cmd_search)
-        tools_menu.add_command(label="Find and Replace...", accelerator="Ctrl+H",
-                               command=self.cmd_replace)
-        tools_menu.add_separator()
         tools_menu.add_command(label="Diagnose This Scene", accelerator="F7",
                                command=lambda: self.cmd_diagnostics("scene"))
         tools_menu.add_command(label="Diagnose This Chapter",
@@ -389,8 +398,6 @@ class App(WritingIntelligence, tk.Tk):
         plan_menu.add_command(label="Relationship Timeline...",
                               command=lambda:
                               self.cmd_story_graph("relationships"))
-        plan_menu.add_command(label="Write Story Bible",
-                              command=self.cmd_story_bible)
         plan_menu.add_separator()
         plan_menu.add_command(label="Idea Inbox...", accelerator="Ctrl+I",
                               command=self.cmd_idea_inbox)
@@ -3652,8 +3659,20 @@ Python {".".join(str(v) for v in __import__("sys").version_info[:3])}
     def on_close(self) -> None:
         try:
             self.commit_all()
-        except Exception:
-            pass
+        except Exception as exc:
+            # commit_all() moves whatever is on screen - the editor text, an
+            # inspector field you just tabbed out of - into project.json and
+            # the manuscript. A silent `pass` here used to mean a bug in one
+            # committer could drop that unsaved edit with the window closing
+            # normally and nothing on screen ever saying so. It gets the same
+            # "close anyway?" choice as a failed project save, a few lines
+            # below, rather than a different, quieter kind of data loss.
+            if not messagebox.askyesno(
+                "Could not save your last change",
+                f"Something you just edited could not be saved:\n\n{exc}\n\n"
+                f"Close anyway and risk losing it?", parent=self,
+            ):
+                return
 
         if self.project:
             if self.tracker:
