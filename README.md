@@ -1,10 +1,101 @@
 # NovelForge
 
-A local novel-writing studio. Every single thing it creates is a real Microsoft
-Word document sitting in a folder on your own disk. Nothing is uploaded, there
-is no account, and it works with the network unplugged.
+**A local novel-writing studio that writes real Word documents, not a
+database you hope to export from someday.**
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6.svg)](#requirements)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-3776AB.svg)](#requirements)
+[![No account, no cloud, no telemetry](https://img.shields.io/badge/cloud-none-success.svg)](#where-your-work-lives)
+[![Support this project](https://img.shields.io/badge/support-donate-ff69b4.svg)](#support-novelforge)
+
+Every single thing NovelForge creates — every scene, every character sheet,
+every map — is a real Microsoft Word document sitting in a folder on your own
+disk. Nothing is uploaded, there is no account, and it works with the network
+unplugged. If NovelForge vanished tomorrow, your novel would still be sitting
+there in Word format, exactly as readable as it is today.
+
+It bundles what a novelist otherwise pieces together from five different
+apps — a Scrivener-style binder and corkboard, nine outline frameworks, a
+timeline, a continuity checker that reads your actual prose, a fantasy map
+maker with one-click procedural worlds, and offline prose diagnostics — into
+one tool that opens in about a second and never asks you to sign in.
 
 **To start it: double-click `Write.bat`.**
+
+---
+
+## Contents
+
+- [The first five minutes](#the-first-five-minutes)
+- [Where your work lives](#where-your-work-lives)
+- [Features at a glance](#features-at-a-glance)
+- [Writing](#writing)
+- [The reference sheets](#the-reference-sheets)
+- [Planning](#planning)
+- [The story graph](#the-story-graph--ctrlg)
+- [Drafts — trying it another way](#drafts--trying-it-another-way)
+- [Idea inbox](#idea-inbox--ctrli)
+- [Research that is attached to something](#research-that-is-attached-to-something)
+- [Maps](#maps--ctrlm)
+- [Corkboard](#corkboard--ctrlk)
+- [Compiling](#compiling)
+- [Diagnostics](#diagnostics)
+- [Drafting anyway](#drafting-anyway)
+- [Statistics](#statistics)
+- [Not losing your work](#not-losing-your-work)
+- [Keyboard shortcuts](#keyboard-shortcuts)
+- [If the power goes out](#if-the-power-goes-out)
+- [Verify this project (F4)](#verify-this-project-f4)
+- [Importing work you already have](#importing-work-you-already-have)
+- [Requirements](#requirements)
+- [Credits](#credits)
+- [Support NovelForge](#support-novelforge)
+
+---
+
+## Features at a glance
+
+### While you write
+
+- Real `.docx` files, one per scene — open and edit in Word or in-app, either direction, always in sync
+- Focus mode, distraction-free mode, ghost mode (hides your text as you type, for perfectionists), typewriter scrolling, sprint timer
+- Live spelling/grammar marks and completion, tuned to *your* manuscript's names and invented words, not a generic dictionary
+
+### Planning & structure
+
+- Nine outline frameworks built in — Three-Act, Save the Cat, Snowflake, Seven-Point, Story Circle, Hero's Journey, Romancing the Beat, Mystery/Crime, Freytag — switch freely, nothing is lost
+- Corkboard with drag-to-reorder index cards, colour-coded by status
+- Free-text timeline that sorts invented calendars correctly
+- Scene/sequel structure per Dwight Swain, with a value-shift check (F8)
+- Real Word reference sheets for characters (~90 fields, including the Ghost/Lie/Truth/Want-vs-Need arc framework), locations, items, factions and plot threads — fill in what serves the story, the app reads back whatever you typed
+
+### World & story intelligence
+
+- The **story graph** (Ctrl+G): mines your actual prose for character/place/object mentions and builds a living map of who was where, cross-checked against a 15-point continuity checker
+- "What depends on this scene?" — see what breaks before you delete something
+- One-click **Story Bible** generation, always current because it's built from the manuscript itself
+- Idea inbox that suggests where a stray thought belongs, by matching it against your own scenes and characters
+
+### Maps and worldbuilding
+
+- One-press **"Surprise Me"** procedurally generated fantasy worlds — coastlines, kingdoms, regions, seas, rivers, roads, dozens of named settlements — reproducible by seed
+- Editable, per-culture name generation (settlements, realms, regions, seas and rivers can each sound different)
+- Hand-drawn tools too: freehand coastlines, 13 terrain types, 20 pin types, layers, 4 art styles
+- Pins link straight to your Location sheets; export to PNG, SVG, or Word with a legend
+
+### Never losing your work
+
+- Atomic writes, per-document version snapshots, verified zip backups, and a crash-recovery journal that asks before it restores anything
+- Full undo/redo for structural edits (delete a chapter, get it back — files included)
+
+### Offline diagnostics
+
+- ~20 prose checks (adverbs, filter words, passive voice, pacing, word echoes, reading level) — all heuristic, all local, nothing rewritten for you
+- A five-type writer's-block diagnostic ranked by actual prevalence, because the fixes contradict each other
+- A pace/streak/deadline dashboard that separates words *added* from words *net* of revision
+
+No AI, no telemetry, no login, no subscription. MIT licensed.
 
 ---
 
@@ -212,7 +303,7 @@ invent a fact, never needs the internet, and answers instantly.
 
 ### Story bible, in one click
 
-**Plan → Write Story Bible** generates a complete Word reference: the book at a
+**Manuscript → Write Story Bible** generates a complete Word reference: the book at a
 glance, every character with their full sheet and first/last appearance, every
 location, item, faction and thread, who knows whom, your structure and beats,
 every chapter and scene with synopses, the chronology, and your research index.
@@ -269,11 +360,25 @@ the story bible, and in the dependency map.
 A drawing tool for the world in your head. Continents, kingdoms, city plans,
 dungeons, treasure maps.
 
-**Draw a coastline:** pick **Freehand**, choose *Land / coast*, hold the left
-button and draw a rough blob. Let go. The line is smoothed, filled, and given
-the concentric coastal halo that makes a map look hand-drawn rather than like a
-diagram. Prefer straight edges? Use **Draw terrain**, click each corner, then
-double-click to close it.
+**Press "Surprise Me"** for a whole world in one click — coastline, kingdoms,
+regions, seas, rivers, roads and dozens of named settlements, built from the
+system's own randomness. Press it again for a different world. Every world
+records its seed, so one you like can be regenerated exactly; **Generate...**
+opens the same thing as a dialog, if you want to choose the preset, size and
+counts yourself rather than leave them to chance.
+
+**Names come from editable lists, not a fixed dictionary.** Settlements,
+kingdoms, regions, seas and rivers can each be given their own naming style —
+so a capital doesn't sound like its villages, and an ocean doesn't sound like
+either. **Edit Names** opens the list (`Name Styles.json`, in the map's own
+folder) so you can add a style or replace the syllables with your own
+invented language.
+
+**Draw a coastline by hand:** pick **Freehand**, choose *Land / coast*, hold
+the left button and draw a rough blob. Let go. The line is smoothed, filled,
+and given the concentric coastal halo that makes a map look hand-drawn rather
+than like a diagram. Prefer straight edges? Use **Draw terrain**, click each
+corner, then double-click to close it.
 
 **Thirteen terrain types.** Filled areas: land, sea, forest, desert, marsh, ice,
 region. Drawn lines: mountain range, hills, river, road, wall, route.
@@ -373,7 +478,7 @@ beats every rule in the list.
 **Tools → Word Frequency** shows your crutch words, which is often more useful
 than all of the above.
 
-**Tools → Write Reverse Outline** builds an outline *from what you actually
+**Manuscript → Write Reverse Outline** builds an outline *from what you actually
 wrote*. Comparing it against your planned outline is the fastest structural
 edit available.
 
@@ -615,9 +720,10 @@ laptop it is quietly reduced to fit.
 Any list that can hold more rows than are visible needs a scrollbar — use
 `scrolled()` in `novelforge/ui/storyviews.py`.
 
-This is enforced by a test that opens all 23 windows at 1024×768, 1366×768,
-1600×900, 1920×1080, 2560×1440 and 3840×2160 and fails if anything overflows.
-Add a window, add it to that test.
+This rule is meant to be enforced by a test that opens every window at six
+resolutions from 1024×768 up to 3840×2160 and fails if anything overflows —
+but that test isn't actually in this repository yet. Treat this as a rule to
+check by hand until someone writes and commits it (see `CLAUDE.md`).
 
 ---
 
@@ -631,14 +737,26 @@ word count read in.
 
 ## Requirements
 
-- Windows, Python 3.13 (installed at `%LOCALAPPDATA%\Programs\Python\Python313`)
-- `pip install python-docx Pillow`
+- **Windows 10 or 11.** (The engine is plain Python and could run elsewhere;
+  the Tkinter UI has only ever been built and tested on Windows.)
+- **Python 3.13 or newer.** Get it from [python.org](https://www.python.org/downloads/)
+  (tick "Add python.exe to PATH" during install) or `winget install Python.Python.3.13`.
+- Two packages: `pip install python-docx Pillow`
+  — `python-docx` writes the Word files, `Pillow` renders the map images.
+  Everything else — the GUI, the drawing, the diagnostics — is the Python
+  standard library. Nothing else to install, no build step, no internet
+  access needed once those two are on disk.
 
-`python-docx` writes the Word files; `Pillow` renders the map images. Everything
-else — the GUI, the drawing, the diagnostics — is the Python standard library.
+**To run it:** clone or download this repository, then double-click
+`Write.bat`. It looks for Python at the usual install locations first and
+falls back to whatever `python`/`pythonw` is on your `PATH`, so it works
+however you installed Python. If it still can't find one, it says so instead
+of failing silently.
 
-`Write.bat` finds Python automatically. If you move Python, edit the two paths
-at the top of that file.
+**Changing the code?** See `CLAUDE.md` for the module map, the load-bearing
+rules, and what's already built versus genuinely missing — this project is
+built entirely through AI pairing, so that file is the only memory that
+carries between sessions.
 
 ---
 
@@ -650,3 +768,37 @@ Dan Wells on the seven-point structure, Dan Harmon on the story circle,
 Christopher Vogler and Joseph Campbell on the hero's journey, Gwen Hayes on
 romance, Randy Ingermanson on the Snowflake Method, Dwight Swain and Jack
 Bickham on scene and sequel, and William Shunn on manuscript format.
+
+---
+
+## Support NovelForge
+
+NovelForge is free, MIT licensed, and always will be — no subscription, no
+paywalled features, nothing held back. If it's useful to you and you'd like
+to help keep it going, a donation is welcome but never expected.
+
+<table>
+<tr>
+<td align="center" width="50%">
+
+**PayPal**
+
+[paypal.me/OmAbhyankar](https://paypal.me/OmAbhyankar)
+
+<img src="assets/donate/paypal-qr.png" width="180" height="180" alt="QR code for paypal.me/OmAbhyankar">
+
+</td>
+<td align="center" width="50%">
+
+**UPI** (India)
+
+`abhyankarom10@ybl`
+
+<img src="assets/donate/upi-qr.png" width="180" height="180" alt="QR code for UPI ID abhyankarom10@ybl">
+
+</td>
+</tr>
+</table>
+
+Scan the UPI code with any UPI app (Google Pay, PhonePe, Paytm, BHIM, your
+bank's app...), or enter the ID by hand. Either way — thank you.
