@@ -40,7 +40,7 @@ to ask them to narrow it down technically.
   own, no build step. This is **not the app** in any form - it's the
   project's public landing page (screenshots, feature list, install steps,
   download link, sponsor links), hosted for free on GitHub Pages at
-  `https://om-abhyankar.github.io/NovelForge/`. See the dedicated section
+  `https://sideeffects69.github.io/NovelForge/`. See the dedicated section
   below before touching it.
 
 If a future session's goal is to finish migrating `novelforge/ui/` to
@@ -463,5 +463,5 @@ python -m http.server 8000     # then open localhost:8000 in a browser
 ```
 Deploys automatically on every push to `main` that touches `site/**`
 (`.github/workflows/deploy-pages.yml`) to
-https://om-abhyankar.github.io/NovelForge/ - no manual deploy step, and
+https://sideeffects69.github.io/NovelForge/ - no manual deploy step, and
 nothing to run locally to publish a change.
