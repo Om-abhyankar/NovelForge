@@ -180,7 +180,11 @@ class MapEditor(tk.Toplevel):
         row += 1
         self.terrain_box = tk.Listbox(left, height=13, exportselection=False,
                                       activestyle="none", borderwidth=1,
-                                      relief="solid", highlightthickness=0)
+                                      relief="solid", highlightthickness=0,
+                                      background=palette["bg"],
+                                      foreground=palette["fg"],
+                                      selectbackground=palette["select"],
+                                      selectforeground=palette["fg"])
         for key in mm.TERRAIN_ORDER:
             self.terrain_box.insert("end", mm.TERRAIN[key]["label"])
         self.terrain_box.selection_set(0)
@@ -203,7 +207,11 @@ class MapEditor(tk.Toplevel):
         row += 1
         self.layer_box = tk.Listbox(left, height=5, exportselection=False,
                                      activestyle="none", borderwidth=1,
-                                     relief="solid", highlightthickness=0)
+                                     relief="solid", highlightthickness=0,
+                                     background=palette["bg"],
+                                     foreground=palette["fg"],
+                                     selectbackground=palette["select"],
+                                     selectforeground=palette["fg"])
         self.layer_box.grid(row=row, column=0, sticky="ew")
         self.layer_box.bind("<Double-1>", lambda _e: self._toggle_layer())
         row += 1

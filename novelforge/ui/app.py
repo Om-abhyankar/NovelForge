@@ -145,17 +145,28 @@ class App(WritingIntelligence, tk.Tk):
 
     def _build_styles(self) -> None:
         self.style = ttk.Style(self)
+        self._apply_theme()
+
+    def _apply_theme(self) -> None:
+        palette = theme()
+        is_dark = str(settings["theme"]) == "premium"
+
+        # "vista" draws buttons, entries and comboboxes with Windows' own
+        # uxtheme renderer, which silently ignores every ttk.Style colour
+        # override below for those specific widgets - fine for the warm/
+        # light themes, since native grey-on-white already blends in, but
+        # it leaves stray white boxes floating in a genuinely dark palette.
+        # "clam" is drawn entirely by Tk itself, so it actually obeys the
+        # colours set here. Scoped to Premium only - Classic keeps the
+        # native chrome it has always had.
         try:
-            self.style.theme_use("vista")
+            self.style.theme_use("clam" if is_dark else "vista")
         except tk.TclError:
             try:
                 self.style.theme_use("clam")
             except tk.TclError:
                 pass
-        self._apply_theme()
 
-    def _apply_theme(self) -> None:
-        palette = theme()
         self.configure(background=palette["panel"])
         self.style.configure("TFrame", background=palette["panel"])
         self.style.configure("TLabel", background=palette["panel"],
@@ -190,6 +201,53 @@ class App(WritingIntelligence, tk.Tk):
                              troughcolor=palette["gutter"],
                              background=palette["accent"],
                              borderwidth=0, thickness=6)
+
+        # Buttons, entries, comboboxes, checkboxes and scrollbars: only
+        # reachable at all under "clam" (see above), so only worth setting
+        # for Premium - under "vista" these calls are silently ignored by
+        # Windows' own renderer, which is correct for Classic's native look.
+        if is_dark:
+            self.style.configure("TButton", background=palette["gutter"],
+                                 foreground=palette["fg"], borderwidth=1,
+                                 relief="flat", focuscolor=palette["accent"])
+            self.style.map("TButton",
+                           background=[("active", palette["select"]),
+                                       ("pressed", palette["select"])])
+            self.style.configure("TEntry", fieldbackground=palette["bg"],
+                                 foreground=palette["fg"],
+                                 insertcolor=palette["caret"],
+                                 borderwidth=1)
+            self.style.configure("TCombobox", fieldbackground=palette["bg"],
+                                 background=palette["gutter"],
+                                 foreground=palette["fg"],
+                                 arrowcolor=palette["fg"], borderwidth=1)
+            self.style.map("TCombobox",
+                           fieldbackground=[("readonly", palette["bg"])],
+                           foreground=[("readonly", palette["fg"])])
+            self.style.configure("TCheckbutton", background=palette["panel"],
+                                 foreground=palette["panel_fg"])
+            self.style.configure("TRadiobutton", background=palette["panel"],
+                                 foreground=palette["panel_fg"])
+            self.style.configure("TScrollbar", background=palette["gutter"],
+                                 troughcolor=palette["panel"],
+                                 arrowcolor=palette["fg"], borderwidth=0)
+            self.style.configure("TNotebook", background=palette["panel"],
+                                 borderwidth=0)
+            self.style.configure("TNotebook.Tab", background=palette["gutter"],
+                                 foreground=palette["fg"], padding=(10, 4))
+            self.style.map("TNotebook.Tab",
+                           background=[("selected", palette["select"])])
+            self.style.configure("TSeparator", background=palette["gutter"])
+            # A ttk Combobox's dropdown list is a plain Tk Listbox that
+            # ttk.Style cannot reach at all - it goes through Tk's classic
+            # option database instead, or it stays black-on-white no matter
+            # what the combobox itself looks like.
+            self.option_add("*TCombobox*Listbox.background", palette["bg"])
+            self.option_add("*TCombobox*Listbox.foreground", palette["fg"])
+            self.option_add("*TCombobox*Listbox.selectBackground",
+                            palette["select"])
+            self.option_add("*TCombobox*Listbox.selectForeground",
+                            palette["fg"])
 
         if hasattr(self, "tree"):
             self._configure_tree_tags()

@@ -226,6 +226,21 @@ THEMES: Dict[str, Dict[str, str]] = {
         "caret": "#33291d",
         "gutter": "#ded2ba",
     },
+    # A writer's desk at night: deep navy workspace, ivory manuscript text,
+    # electric blue as the one accent - not a repaint of every pixel blue.
+    # Same 9 keys as every other theme here, so nothing that reads
+    # theme() needed to change to support it.
+    "premium": {
+        "bg": "#0a1220",
+        "fg": "#f4f1e8",
+        "panel": "#0c1524",
+        "panel_fg": "#dce5ef",
+        "accent": "#2b9cf4",
+        "dim": "#7f8da0",
+        "select": "#1b3150",
+        "caret": "#56c8ff",
+        "gutter": "#142238",
+    },
 }
 
 

@@ -348,19 +348,71 @@ elements as they scroll into view, skipped entirely under
 automatically by `.github/workflows/deploy-pages.yml` on any push to
 `main` that touches `site/**`.
 
-**Redesigned 2026-09** after the first version was fairly reasonably
-called "basic" - the user pointed at obsidian.md, literatureandlatte.com/
-scrivener and atticus.io as the bar. Two Google Fonts (Fraunces for display
-type, Inter for body - `<link>`ed, not self-hosted, with system-font
-fallbacks so nothing breaks if the CDN is unreachable), a `.window-chrome`
+**Redesigned 2026-09, twice.** First pass: fairly called "basic" - the user
+pointed at obsidian.md, literatureandlatte.com/scrivener and atticus.io as
+the bar. Added Fraunces (display) + Inter (body), a `.window-chrome`
 wrapper (macOS-style traffic-light dots + title bar) around every
 screenshot so a plain Tkinter capture reads as a polished product shot, a
-subtle animated gradient glow behind the hero (`@keyframes drift`, disabled
-under reduced-motion), and a head-to-head comparison table against
-Scrivener/Atticus/Obsidian - the same pattern Atticus's own site uses
-against Vellum. Kept the warm/parchment identity rather than drifting into
-a generic purple-SaaS look; premium and on-brand aren't the same thing as
-matching a competitor's palette.
+head-to-head comparison table against Scrivener/Atticus/Obsidian (the same
+pattern Atticus's own site uses against Vellum), and scroll-reveal via
+`app.js`. Kept the warm/parchment identity at that point, reasoning that
+copying a competitor's palette isn't the same thing as looking premium.
+
+**Second pass, same day**: the user then supplied a real logo/brand
+package (navy + electric-blue + ivory, a book/quill "N" mark) and a very
+detailed design spec explicitly modelled on Obsidian + Scrivener + Linear +
+"a sophisticated writer's desk at night," with exact hex values, a full
+token list, and instructions to apply the identical palette to both the
+desktop app and the website. That reasoning about the warm palette being
+more distinctively premium didn't survive contact with an actual brand
+package - the site now runs on that dark-navy/electric-blue system
+(swapped Fraunces → Literata per the spec's typography section; kept the
+`.window-chrome` and comparison-table patterns from the first pass, they
+weren't palette-specific). The **desktop app got a real Preferences theme
+option out of this too**: `THEMES["premium"]` in `config.py`, the same
+9-key dict every other theme here already uses, selectable in Preferences
+with zero other UI code needing to change (the dropdown already reads
+`THEMES.keys()`). It is **not** selected by default - `warm` still is,
+Classic in the spec's terms - since it hasn't had the scrutiny a default
+deserves.
+
+Getting it to actually look coherent, not just "the dict has navy values
+now," took a real fix, not just new hex codes: `app.py`'s `_apply_theme()`
+used to configure zero ttk style for `TButton`/`TEntry`/`TCombobox`, for
+*any* theme - invisible against light backgrounds, but every toolbar
+button and inspector field stayed a flat white box against the new dark
+palette, because Windows' native "vista" ttk renderer draws those specific
+widgets itself and ignores Tk colour overrides outright. Fixed by
+switching to "clam" (fully Tk-drawn, actually obeys `ttk.Style`) **only**
+when `settings["theme"] == "premium"` - Classic keeps the exact native
+chrome it always had. `widgets.py`'s `Form.multiline()` had the identical
+gap one level down (a bare `tk.Text`, styled for no theme, ever - a latent
+bug in "dark" too, not new) and now reads `theme()` at creation time.
+`mapeditor.py`'s two `tk.Listbox`es (terrain, layers) got the same
+treatment. All of this was found by actually launching the app against
+each palette and looking at a real screenshot, not by reading the colour
+values and assuming they took - the white-box failure mode is invisible
+in code review.
+
+**Known remaining gap, not yet fixed**: several other `tk.Listbox`
+widgets - `dialogs.py` (scene picker, a couple of list-based dialogs),
+`storyviews.py` (name-suggestion and search-result lists),
+`writing.py` (the autocomplete popup) - are still unstyled for the same
+reason `multiline()` was, in secondary/occasional windows rather than the
+constant-use ones. Same fix, same three-line pattern
+(`background=palette["bg"], foreground=palette["fg"],
+selectbackground=palette["select"]`), just not yet applied - grep each
+file for `tk.Listbox(` to find them. Tkinter has no drop-shadow, backdrop-
+blur, or smooth hover-elevation regardless of any of this; the parts of
+the spec written assuming a browser (glow, 150ms transitions on every
+control) don't have a faithful desktop equivalent without replacing native
+widgets with hand-drawn Canvas ones - a real, separate, much larger
+project. Get explicit sign-off before ever starting that.
+
+The full CSS palette, exactly as specified, is recorded in `site/style.css`
+as CSS custom properties (`--bg`, `--surface-1`...`--surface-3`, `--brand`,
+etc.) - copy those hex values rather than re-deriving them if the desktop
+app's token system is ever extended to match more closely.
 
 **Screenshots** (`site/assets/screenshots/`) were taken against a disposable
 demo project (`Kessa Ren` / "The Ashfall Crown"), seeded via

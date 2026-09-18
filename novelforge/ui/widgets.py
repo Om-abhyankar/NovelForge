@@ -12,6 +12,8 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
+from ..config import theme
+
 
 class ScrollFrame(ttk.Frame):
     """A vertically scrollable container. Add children to `.body`."""
@@ -182,9 +184,20 @@ class Form:
     def multiline(self, label: str, obj: Any, attr: str,
                   height: int = 3) -> tk.Text:
         self._label(label, top=True)
+        # A plain tk.Text defaults to a white background regardless of the
+        # active theme - invisible against the light themes this was
+        # written against, but a stray white box against a genuinely dark
+        # one. Every inspector field a writer types prose into (synopsis,
+        # goal/conflict/disaster, a character's history) goes through here,
+        # so this is worth colouring rather than leaving as the one
+        # unthemed control in the panel.
+        palette = theme()
         widget = tk.Text(self.parent, height=height, wrap="word", undo=True,
                          borderwidth=1, relief="solid", highlightthickness=0,
-                         padx=4, pady=3)
+                         padx=4, pady=3,
+                         background=palette["bg"], foreground=palette["fg"],
+                         insertbackground=palette["caret"],
+                         selectbackground=palette["select"])
         value = str(getattr(obj, attr, "") or "")
         if value:
             widget.insert("1.0", value)
