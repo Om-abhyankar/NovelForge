@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NovelForge Web</title>
+<meta name="description" content="Write your novel in the browser, free, with no account. Export a real Word document per scene at any time; import it later on any device to keep going.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📖</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">NovelForge</span><span class="brand-web">Web</span>
+  </div>
+  <div class="topbar-actions">
+    <button id="btn-new" class="btn">New</button>
+    <button id="btn-import" class="btn">Import…</button>
+    <button id="btn-export" class="btn btn-primary">Export</button>
+    <input id="file-import" type="file" accept=".zip" hidden>
+  </div>
+</header>
+
+<div class="notice" id="notice" hidden></div>
+
+<main class="layout" id="layout" hidden>
+  <aside class="binder">
+    <div class="binder-header">
+      <span>MANUSCRIPT</span>
+      <button id="btn-add-chapter" class="icon-btn" title="Add chapter">+ Chapter</button>
+    </div>
+    <div id="binder-tree" class="binder-tree"></div>
+  </aside>
+
+  <section class="editor-pane">
+    <div class="editor-toolbar">
+      <input id="scene-title" class="scene-title-input" placeholder="Scene title" disabled>
+      <span id="word-count" class="word-count">0 words</span>
+      <span id="save-state" class="save-state"></span>
+    </div>
+    <textarea id="editor" class="editor" placeholder="Select or add a scene to start writing…" disabled spellcheck="true"></textarea>
+  </section>
+</main>
+
+<section class="welcome" id="welcome">
+  <h1>Write your novel, right here, free.</h1>
+  <p class="lede">No account. Nothing uploaded. Your writing is saved to this
+    browser as you type, and you can export it as real Word documents any
+    time — take that file home, open it again later, or bring it into the
+    full desktop app.</p>
+  <div class="welcome-actions">
+    <button id="btn-welcome-new" class="btn btn-primary btn-lg">Start a new novel</button>
+    <button id="btn-welcome-import" class="btn btn-lg">Import a saved file</button>
+  </div>
+  <p class="fine-print">
+    This is a lightweight companion to
+    <a href="https://github.com/Om-abhyankar/NovelForge" target="_blank" rel="noopener">NovelForge</a>,
+    a free desktop app for Windows with maps, outline frameworks, a
+    continuity checker and more. This browser version covers the core
+    writing loop only — chapters, scenes, and export to real .docx files.
+  </p>
+</section>
+
+<div class="modal-backdrop" id="modal-backdrop" hidden>
+  <div class="modal" id="modal"></div>
+</div>
+
+<script src="vendor/jszip.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
